@@ -196,29 +196,30 @@ def sa_expr_simp(instrs):
     return instrs_new
 
 
-def sa_copy_propogate(instrs):
+def sa_copy_propagate(instrs):
     '''
-    Different to expression simplification since works for all ops on RHS.
+    This only copys variables and not expressions. Otherwise the following will not be simpler:
+        r2 = r1 + 1
+        r3 = r2
     '''
-    # memory writes as a first pass as replacing assignments lose information
     instrs_new = []
     var_map = {}
     for instr in instrs:
-        if instr[1].endswith(']=') and instr[0] in var_map:
-            instr = var_map[instr[0]] + instr[1:]
-        if len(instr) == 3 and instr[1] == '=':
-            var_map[instr[0]] = instr[2:]
-        instrs_new.append(instr)
-    instrs = instrs_new
+        # assignment
+        parts = []
+        for part in instr[2:]:
+            if part in var_map:
+                part = var_map[part]
+            parts.append(part)
+        instr = instr[:2] + tuple(parts)
 
-    # assignments
-    instrs_new = []
-    var_map = {}
-    for instr in instrs:
-        if len(instr) == 3 and instr[2] in var_map:
-            instr = instr[:2] + var_map[instr[2]]
-        if instr[1] == '=':
-            var_map[instr[0]] = instr[2:]
+        # memory write
+        if instr[1].endswith(']=') and instr[0] in var_map:
+            instr = (var_map[instr[0]],) + instr[1:]
+
+        # store propagated var
+        if len(instr) == 3 and instr[1] == '=':
+            var_map[instr[0]] = instr[2]
         instrs_new.append(instr)
     return instrs_new
 
@@ -281,7 +282,7 @@ def simplify_block(instrs):
     instrs = sa_to_ssa(instrs)
     # XXX memory constant elimination
     instrs = sa_expr_simp(instrs)
-    instrs = sa_copy_propogate(instrs)
+    instrs = sa_copy_propagate(instrs)
     instrs = sa_dead_code_elim(instrs, (
         'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
         'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
