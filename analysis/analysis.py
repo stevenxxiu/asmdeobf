@@ -61,7 +61,7 @@ def simplify_block(instrs):
 
     # constant propogation
 
-    # convert to human-readable form
+    # pretty print
     return '\n'.join(' '.join(
         (f'0x{part:08x}' if isinstance(part, int) else part for part in instr)
     ) for instr in instrs)
