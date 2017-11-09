@@ -1,21 +1,17 @@
 import r2pipe
 
 
-def pd_esil(s):
+def pd_extract_esil(s):
     '''
     Extracts esil string from a line of disasm (from pd command). Requires `e asm.esil=true`.
     '''
     return s.split('\n')[-1][43:].split(';')[0]
 
 
-def simplify_block(instrs):
+def esil_to_sa(instrs):
     '''
-    Simplifies a block. A block is assumed to have no branches.
+    Convert to sa form: (dest, assign_op, ...src).
     '''
-    # remove branch instructions
-    instrs = [instr for instr in instrs if '?{' not in instr]
-
-    # convert to sa form: (dest, assign_op, ...src)
     instrs = [part for instr in instrs for part in instr.strip().split(',')]
     instrs_new = []
     instr_stack = []
@@ -33,10 +29,10 @@ def simplify_block(instrs):
             # esil register
             instr_stack.append(instr)
         elif instr in (
-            'al', 'ax', 'eax',
-            'cl', 'cx', 'ecx',
-            'dl', 'dx', 'edx',
-            'bl', 'bx', 'ebx',
+            'al', 'ah', 'ax', 'eax',
+            'cl', 'ch', 'cx', 'ecx',
+            'dl', 'dh', 'dx', 'edx',
+            'bl', 'bh', 'bx', 'ebx',
             'sp', 'esp',
             'bp', 'ebp',
             'si', 'esi',
@@ -62,9 +58,13 @@ def simplify_block(instrs):
             tmp_num += 1
         else:
             raise ValueError(instr)
-    instrs = instrs_new
+    return instrs_new
 
-    # include all register dependencies for flags
+
+def sa_include_flag_deps(instrs):
+    '''
+    Include all register dependencies for flags.
+    '''
     instrs_new = []
     i = 0
     while i < len(instrs):
@@ -80,15 +80,32 @@ def simplify_block(instrs):
             i += 1
         instrs_new.append(non_flag_instr)
         i += 1
-    instrs = instrs_new
+    return instrs_new
 
-    # include all register dependencies for sub-word modifications
 
-    # convert to ssa form
+def sa_include_subword_deps(instrs):
+    '''
+    Include all register dependencies for sub-word modifications, generated redundant code is optimized later.
+    '''
+    regdefs = [
+        ('al', 'eax', 'l'), ('ah', 'eax', 'h'), ('ax', 'eax', 'x'),
+        ('cl', 'ecx', 'l'), ('ch', 'ecx', 'h'), ('cx', 'ecx', 'x'),
+        ('dl', 'edx', 'l'), ('dh', 'edx', 'h'), ('dx', 'edx', 'x'),
+        ('bl', 'ebx', 'l'), ('bh', 'ebx', 'h'), ('bx', 'ebx', 'x'),
+    ]
+    instrs_new = []
+    for instr in instrs:
+        for subreg, reg, op in regdefs:
+            if subreg in instr[2:]:
+                instrs_new.append((subreg, f'={op}', reg))
+        instrs_new.append(instr)
+        for subreg, reg, op in regdefs:
+            if subreg == instr[0]:
+                instrs_new.append((reg, f'{op}=', subreg))
+    return instrs_new
 
-    # constant propogation
 
-    # pretty print
+def sa_pprint(instrs):
     instrs_new = []
     for instr in instrs:
         parts = [f'0x{part:08x}' if isinstance(part, int) else part for part in instr]
@@ -102,6 +119,20 @@ def simplify_block(instrs):
         else:
             instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}({", ".join(parts[3:])})')
     return '\n'.join(instrs_new)
+
+
+def simplify_block(instrs):
+    '''
+    Simplifies a block. A block is assumed to have no branches.
+    '''
+    # remove branch instructions
+    instrs = [instr for instr in instrs if '?{' not in instr]
+    instrs = esil_to_sa(instrs)
+    instrs = sa_include_flag_deps(instrs)
+    instrs = sa_include_subword_deps(instrs)
+    # XXX convert to ssa form
+    # XXX constant propogation
+    return sa_pprint(instrs)
 
 
 def main():
@@ -122,7 +153,7 @@ def main():
 
         instrs = []
         for i in range(106):
-            instrs.append(pd_esil(r.cmd(f'pd 1 @ {r.cmd("aer eip")}')))
+            instrs.append(pd_extract_esil(r.cmd(f'pd 1 @ {r.cmd("aer eip")}')))
             r.cmd('aes')
         print(simplify_block(instrs))
     finally:
