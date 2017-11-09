@@ -235,7 +235,7 @@ def sa_dead_code_elim(instrs, useful_regs):
     # find vars which write to registers
     tainted_vars_map = {}
     for instr in instrs:
-        if is_var(instr[0]):
+        if not instr[1].endswith(']=') and is_var(instr[0]):
             tainted_var = instr[0].split('_')[0]
             if tainted_var in useful_regs:
                 tainted_vars_map[tainted_var] = instr[0]
