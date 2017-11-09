@@ -1,4 +1,19 @@
+from collections import defaultdict
+
 import r2pipe
+
+x86_regs = (
+    'al', 'ah', 'ax', 'eax',
+    'cl', 'ch', 'cx', 'ecx',
+    'dl', 'dh', 'dx', 'edx',
+    'bl', 'bh', 'bx', 'ebx',
+    'sp', 'esp',
+    'bp', 'ebp',
+    'si', 'esi',
+    'di', 'edi',
+    'eip',
+    'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+)
 
 
 def pd_extract_esil(s):
@@ -28,19 +43,8 @@ def esil_to_sa(instrs):
         elif instr.startswith('$'):
             # esil register
             instr_stack.append(instr)
-        elif instr in (
-            'al', 'ah', 'ax', 'eax',
-            'cl', 'ch', 'cx', 'ecx',
-            'dl', 'dh', 'dx', 'edx',
-            'bl', 'bh', 'bx', 'ebx',
-            'sp', 'esp',
-            'bp', 'ebp',
-            'si', 'esi',
-            'di', 'edi',
-            'eip',
-            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-        ):
-            # cpu register
+        elif instr in x86_regs:
+            # x86 register
             instr_stack.append(instr)
         elif instr in ('=', '=[]', '=[1]', '=[2]', '=[4]'):
             instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
@@ -105,6 +109,28 @@ def sa_include_subword_deps(instrs):
     return instrs_new
 
 
+def sa_to_ssa(instrs):
+    '''
+    Convert to ssa form.
+    '''
+    instrs_new = []
+    reg_num = defaultdict(int)
+    for instr in instrs:
+        parts_new = [instr[0], instr[1]]
+        for part in instr[2:]:
+            if part in x86_regs:
+                parts_new.append(f'{part}_{reg_num[part]}')
+            else:
+                parts_new.append(part)
+        part = instr[0]
+        if part in x86_regs:
+            if not instr[1].startswith('=['):
+                reg_num[part] += 1
+            parts_new[0] = f'{part}_{reg_num[part]}'
+        instrs_new.append(tuple(parts_new))
+    return instrs_new
+
+
 def sa_pprint(instrs):
     instrs_new = []
     for instr in instrs:
@@ -130,7 +156,7 @@ def simplify_block(instrs):
     instrs = esil_to_sa(instrs)
     instrs = sa_include_flag_deps(instrs)
     instrs = sa_include_subword_deps(instrs)
-    # XXX convert to ssa form
+    instrs = sa_to_ssa(instrs)
     # XXX constant propogation
     return sa_pprint(instrs)
 
