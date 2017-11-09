@@ -17,14 +17,18 @@ def simplify_block(instrs):
 
     # convert to sa form
     instrs = [part for instr in instrs for part in instr.strip().split(',')]
+    instrs_new = []
     instr_stack = []
-    instrs_sa = []
     tmp_num = 0
     for instr in instrs:
         if str.isdecimal(instr):
             instr_stack.append(int(instr))
         elif instr.startswith('0x'):
             instr_stack.append(int(instr, 16))
+        elif instr == '$0':
+            instr_stack.append(0)
+        elif instr == '$1':
+            instr_stack.append(1)
         elif instr in (
                 'al', 'ax', 'eax',
                 'cl', 'cx', 'ecx',
@@ -36,37 +40,47 @@ def simplify_block(instrs):
                 'di', 'edi',
                 'eip',
                 'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-                '$0', '$1', '$b4', '$b16', '$c31', '$o', '$p', '$s', '$z',
+                '$b4', '$b16', '$c31', '$p', '$z', '$s', '$o',
         ):
             instr_stack.append(instr)
         elif instr in ('=', '=[]', '=[1]', '=[2]', '=[4]'):
-            instrs_sa.append((instr_stack.pop(), instr, instr_stack.pop()))
+            instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
         elif instr in ('+=', '-=', '*=', '/=', '&=', '^='):
             stack_1 = instr_stack.pop()
             stack_2 = instr_stack.pop()
-            instrs_sa.append((stack_1, '=', stack_1, instr[0], stack_2))
+            instrs_new.append((stack_1, '=', instr[0], stack_1, stack_2))
         elif instr in ('+', '-', '*', '/', '&', '^', '=='):
-            instrs_sa.append((f'tmp_{tmp_num}', '=', instr_stack.pop(), instr, instr_stack.pop()))
+            instrs_new.append((f'tmp_{tmp_num}', '=', instr, instr_stack.pop(), instr_stack.pop()))
             instr_stack.append(f'tmp_{tmp_num}')
             tmp_num += 1
         elif instr in ('[1]', '[2]', '[4]'):
-            instrs_sa.append((f'tmp_{tmp_num}', f'={instr}', instr_stack.pop()))
+            instrs_new.append((f'tmp_{tmp_num}', f'={instr}', instr_stack.pop()))
             instr_stack.append(f'tmp_{tmp_num}')
             tmp_num += 1
         else:
             raise ValueError(instr)
-    instrs = instrs_sa
+    instrs = instrs_new
 
-    # process shortened forms of the full register (with custom ops like =1, =2, =4)
+    # process register dependencies, with custom ops if required
 
     # convert to ssa form
 
     # constant propogation
 
     # pretty print
-    return '\n'.join(' '.join(
-        (f'0x{part:08x}' if isinstance(part, int) else part for part in instr)
-    ) for instr in instrs)
+    instrs_new = []
+    for instr in instrs:
+        parts = [f'0x{part:08x}' if isinstance(part, int) else part for part in instr]
+        arity = len(parts) - 3
+        if arity == 0:
+            instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}')
+        elif arity == 1:
+            instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}{parts[3]}')
+        elif arity == 2:
+            instrs_new.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
+        else:
+            instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}({", ".join(parts[3:])})')
+    return '\n'.join(instrs_new)
 
 
 def main():
