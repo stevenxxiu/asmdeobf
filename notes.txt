@@ -1,1 +1,2 @@
-We suppose the file is packed, and use radare to run each loop to unpack incrementally. For analysis, when we encounter something that looks like a loop, we extract its code and run deobfuscate it. An assumption we make for each loop is that the code is not self-modifying, i.e. there are no memory writes to code that is already run in the current loop.
+# Analysis
+The binary is not packed. In order to analyze it, as a first attempt we use radare to emulate a block of instructions until we meet some api call. An assumption we make for each block is that the code is not self-modifying, i.e. there are no memory writes to code that is already run in the current block.
