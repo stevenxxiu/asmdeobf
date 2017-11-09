@@ -2,25 +2,16 @@ from collections import defaultdict
 
 import r2pipe
 
-x86_regs = (
-    'al', 'ah', 'ax', 'eax',
-    'cl', 'ch', 'cx', 'ecx',
-    'dl', 'dh', 'dx', 'edx',
-    'bl', 'bh', 'bx', 'ebx',
-    'sp', 'esp',
-    'bp', 'ebp',
-    'si', 'esi',
-    'di', 'edi',
-    'eip',
-    'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-)
-
 
 def pd_extract_esil(s):
     '''
     Extracts esil string from a line of disasm (from pd command). Requires `e asm.esil=true`.
     '''
     return s.split('\n')[-1][43:].split(';')[0]
+
+
+def is_var(name):
+    return isinstance(name, str) and str.isidentifier(name)
 
 
 def esil_to_sa(instrs):
@@ -43,11 +34,24 @@ def esil_to_sa(instrs):
         elif instr.startswith('$'):
             # esil register
             instr_stack.append(instr)
-        elif instr in x86_regs:
+        elif instr in (
+            'al', 'ah', 'ax', 'eax',
+            'cl', 'ch', 'cx', 'ecx',
+            'dl', 'dh', 'dx', 'edx',
+            'bl', 'bh', 'bx', 'ebx',
+            'sp', 'esp',
+            'bp', 'ebp',
+            'si', 'esi',
+            'di', 'edi',
+            'eip',
+            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+        ):
             # x86 register
             instr_stack.append(instr)
-        elif instr in ('=', '=[]', '=[1]', '=[2]', '=[4]'):
+        elif instr == '=':
             instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
+        elif instr.startswith('=['):
+            instrs_new.append((instr_stack.pop(), f'{instr[1:]}=', instr_stack.pop()))
         elif instr in ('+=', '-=', '*=', '/=', '&=', '^='):
             stack_1 = instr_stack.pop()
             stack_2 = instr_stack.pop()
@@ -96,6 +100,10 @@ def sa_include_subword_deps(instrs):
         ('cl', 'ecx', 'l'), ('ch', 'ecx', 'h'), ('cx', 'ecx', 'x'),
         ('dl', 'edx', 'l'), ('dh', 'edx', 'h'), ('dx', 'edx', 'x'),
         ('bl', 'ebx', 'l'), ('bh', 'ebx', 'h'), ('bx', 'ebx', 'x'),
+        ('sp', 'esp', 'x'),
+        ('bp', 'ebp', 'x'),
+        ('si', 'esi', 'x'),
+        ('di', 'edi', 'x'),
     ]
     instrs_new = []
     for instr in instrs:
@@ -114,20 +122,46 @@ def sa_to_ssa(instrs):
     Convert to ssa form.
     '''
     instrs_new = []
-    reg_num = defaultdict(int)
+    var_num = defaultdict(int)
     for instr in instrs:
         parts_new = [instr[0], instr[1]]
         for part in instr[2:]:
-            if part in x86_regs:
-                parts_new.append(f'{part}_{reg_num[part]}')
+            if is_var(part) and not part.startswith('tmp'):
+                parts_new.append(f'{part}_{var_num[part]}')
             else:
                 parts_new.append(part)
         part = instr[0]
-        if part in x86_regs:
-            if not instr[1].startswith('=['):
-                reg_num[part] += 1
-            parts_new[0] = f'{part}_{reg_num[part]}'
+        if is_var(part) and not part.startswith('tmp'):
+            if not instr[1].endswith(']='):
+                var_num[part] += 1
+            parts_new[0] = f'{part}_{var_num[part]}'
         instrs_new.append(tuple(parts_new))
+    return instrs_new
+
+
+def sa_dead_code_elim(instrs, useful_regs):
+    instrs_new = []
+    tainted_vars = set()
+    # find vars which write to registers
+    tainted_vars_map = {}
+    for instr in instrs:
+        if isinstance(instr[0], str):
+            tainted_var = instr[0].split('_')[0]
+            if tainted_var in useful_regs:
+                tainted_vars_map[tainted_var] = instr[0]
+    tainted_vars.update(tainted_vars_map.values())
+    # find vars which write to memory
+    for instr in instrs:
+        if instr[1].endswith(']='):
+            for part in instr:
+                if isinstance(part, str):
+                    tainted_vars.add(part)
+    print(tainted_vars)
+    # find vars which write to a tainted var by working backwards
+
+    # only include instructions which write to tainted vars
+
+    instrs_new = instrs
     return instrs_new
 
 
@@ -158,6 +192,10 @@ def simplify_block(instrs):
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
     # XXX constant propogation
+    instrs = sa_dead_code_elim(instrs, (
+        'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
+        'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+    ))
     return sa_pprint(instrs)
 
 
