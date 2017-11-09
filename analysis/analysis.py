@@ -15,7 +15,7 @@ def simplify_block(instrs):
     # remove branch instructions
     instrs = [instr for instr in instrs if '?{' not in instr]
 
-    # convert to sa form
+    # convert to sa form: (dest, assign_op, ...src)
     instrs = [part for instr in instrs for part in instr.strip().split(',')]
     instrs_new = []
     instr_stack = []
@@ -29,19 +29,22 @@ def simplify_block(instrs):
             instr_stack.append(0)
         elif instr == '$1':
             instr_stack.append(1)
+        elif instr.startswith('$'):
+            # esil register
+            instr_stack.append(instr)
         elif instr in (
-                'al', 'ax', 'eax',
-                'cl', 'cx', 'ecx',
-                'dl', 'dx', 'edx',
-                'bl', 'bx', 'ebx',
-                'sp', 'esp',
-                'bp', 'ebp',
-                'si', 'esi',
-                'di', 'edi',
-                'eip',
-                'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-                '$b4', '$b16', '$c31', '$p', '$z', '$s', '$o',
+            'al', 'ax', 'eax',
+            'cl', 'cx', 'ecx',
+            'dl', 'dx', 'edx',
+            'bl', 'bx', 'ebx',
+            'sp', 'esp',
+            'bp', 'ebp',
+            'si', 'esi',
+            'di', 'edi',
+            'eip',
+            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
         ):
+            # cpu register
             instr_stack.append(instr)
         elif instr in ('=', '=[]', '=[1]', '=[2]', '=[4]'):
             instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
@@ -61,7 +64,25 @@ def simplify_block(instrs):
             raise ValueError(instr)
     instrs = instrs_new
 
-    # process register dependencies, with custom ops if required
+    # include all register dependencies for flags
+    instrs_new = []
+    i = 0
+    while i < len(instrs):
+        # append flag instructions first to avoid modification of register involved in computation of flag
+        non_flag_instr = instrs[i]
+        while i < len(instrs) - 1 and instrs[i + 1][0] in (
+            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of'
+        ):
+            if isinstance(instrs[i + 1][2], int):
+                instrs_new.append(instrs[i + 1])
+            else:
+                instrs_new.append(instrs[i + 1] + non_flag_instr[2:])
+            i += 1
+        instrs_new.append(non_flag_instr)
+        i += 1
+    instrs = instrs_new
+
+    # include all register dependencies for sub-word modifications
 
     # convert to ssa form
 
