@@ -145,7 +145,7 @@ def sa_dead_code_elim(instrs, useful_regs):
     # find vars which write to registers
     tainted_vars_map = {}
     for instr in instrs:
-        if isinstance(instr[0], str):
+        if is_var(instr[0]):
             tainted_var = instr[0].split('_')[0]
             if tainted_var in useful_regs:
                 tainted_vars_map[tainted_var] = instr[0]
@@ -154,14 +154,18 @@ def sa_dead_code_elim(instrs, useful_regs):
     for instr in instrs:
         if instr[1].endswith(']='):
             for part in instr:
-                if isinstance(part, str):
+                if is_var(part):
                     tainted_vars.add(part)
-    print(tainted_vars)
-    # find vars which write to a tainted var by working backwards
-
+    # find vars which assign to a tainted var by working backwards
+    for instr in reversed(instrs):
+        if not instr[1].endswith(']=') and instr[0] in tainted_vars:
+            for part in instr[2:]:
+                if is_var(part):
+                    tainted_vars.add(part)
     # only include instructions which write to tainted vars
-
-    instrs_new = instrs
+    for instr in instrs:
+        if instr[1].endswith(']=') or instr[0] in tainted_vars:
+            instrs_new.append(instr)
     return instrs_new
 
 
