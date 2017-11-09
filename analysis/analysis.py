@@ -51,11 +51,16 @@ def esil_to_sa(instrs):
         elif instr == '=':
             instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
         elif instr.startswith('=['):
-            instrs_new.append((instr_stack.pop(), f'{instr[1:]}=', instr_stack.pop()))
+            dest = instr_stack.pop()
+            src = instr_stack.pop()
+            size = instr[2:-1]
+            if not size and src == 'eip':
+                size = 4
+            instrs_new.append((dest, f'[{size}]=', src))
         elif instr in ('+=', '-=', '*=', '/=', '&=', '^='):
-            stack_1 = instr_stack.pop()
-            stack_2 = instr_stack.pop()
-            instrs_new.append((stack_1, '=', instr[0], stack_1, stack_2))
+            dest = instr_stack.pop()
+            src = instr_stack.pop()
+            instrs_new.append((dest, '=', instr[0], dest, src))
         elif instr in ('+', '-', '*', '/', '&', '^', '=='):
             instrs_new.append((f'tmp_{tmp_num}', '=', instr, instr_stack.pop(), instr_stack.pop()))
             instr_stack.append(f'tmp_{tmp_num}')
