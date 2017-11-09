@@ -2,7 +2,9 @@ import r2pipe
 
 
 def pd_esil(s):
-    # requires `e asm.esil=true`
+    '''
+    Extracts esil string from a line of disasm (from pd command). Requires `e asm.esil=true`.
+    '''
     return s.split('\n')[-1][43:].split(';')[0]
 
 
