@@ -139,6 +139,19 @@ def sa_to_ssa(instrs):
     return instrs_new
 
 
+def sa_copy_propogate(instrs):
+    instrs_new = []
+    var_map = {}
+    for instr in instrs:
+        if instr[1] == '=':
+            var_map[instr[0]] = instr[2:]
+        if len(instr) == 3 and instr[2] in var_map:
+            instrs_new.append(instr[:2] + var_map[instr[2]])
+        else:
+            instrs_new.append(instr)
+    return instrs_new
+
+
 def sa_dead_code_elim(instrs, useful_regs):
     instrs_new = []
     tainted_vars = set()
@@ -195,7 +208,8 @@ def simplify_block(instrs):
     instrs = sa_include_flag_deps(instrs)
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
-    # XXX constant propogation
+    # XXX expression simplification
+    instrs = sa_copy_propogate(instrs)
     instrs = sa_dead_code_elim(instrs, (
         'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
         'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
