@@ -139,16 +139,87 @@ def sa_to_ssa(instrs):
     return instrs_new
 
 
+def sa_expr_simp(instrs):
+    # replace a ^ a with 0
+    instrs_new = []
+    for instr in instrs:
+        if instr[2] == '^' and instr[3] == instr[4]:
+            instrs_new.append(instr[:2] + (0,))
+        else:
+            instrs_new.append(instr)
+    instrs = instrs_new
+
+    # simplify expressions involving a + 1, a - 1
+    instrs_new = []
+    var_map = {}
+    expr_map = {}
+    for instr in instrs:
+        if instr[2] in ('+', '-'):
+            vars_ = []
+
+            # replace constant vars
+            for var_ in instr[3:]:
+                if var_ in var_map and len(var_map[var_]) == 1:
+                    var_ = var_map[var_][0]
+                vars_.append(var_)
+            instr = instr[:3] + tuple(vars_)
+
+            # simplify expressions
+            var_ = instr[3]
+            if var_ in var_map and len(var_map[var_]) == 3 and isinstance(instr[4], int):
+                expr_1 = var_map[var_]
+                int_1 = -expr_1[2] if expr_1[0] == '-' else expr_1[2]
+                expr_2 = instr[2:]
+                int_2 = -expr_2[2] if expr_2[0] == '-' else expr_2[2]
+                int_res = int_1 + int_2
+                if int_res > 0:
+                    instr = instr[:2] + ('+', expr_1[1], int_res)
+                elif int_res < 0:
+                    instr = instr[:2] + ('-', expr_1[1], -int_res)
+                else:
+                    instr = instr[:2] + (expr_1[1],)
+
+            # re-use expression if it already exists
+            if instr[2:] in expr_map:
+                instr = instr[:2] + (expr_map[instr[2:]],)
+
+        instrs_new.append(instr)
+
+        # store simplified expression
+        if instr[1] == '=':
+            if len(instr) == 3:
+                var_map[instr[0]] = instr[2:]
+            if instr[2] in ('+', '-') and isinstance(instr[4], int):
+                var_map[instr[0]] = instr[2:]
+                expr_map[instr[2:]] = instr[0]
+
+    return instrs_new
+
+
 def sa_copy_propogate(instrs):
+    '''
+    Different to expression simplification since works for all ops on RHS.
+    '''
+    # memory writes as a first pass as replacing assignments lose information
     instrs_new = []
     var_map = {}
     for instr in instrs:
+        if instr[1].endswith(']=') and instr[0] in var_map:
+            instr = var_map[instr[0]] + instr[1:]
+        if len(instr) == 3 and instr[1] == '=':
+            var_map[instr[0]] = instr[2:]
+        instrs_new.append(instr)
+    instrs = instrs_new
+
+    # assignments
+    instrs_new = []
+    var_map = {}
+    for instr in instrs:
+        if len(instr) == 3 and instr[2] in var_map:
+            instr = instr[:2] + var_map[instr[2]]
         if instr[1] == '=':
             var_map[instr[0]] = instr[2:]
-        if len(instr) == 3 and instr[2] in var_map:
-            instrs_new.append(instr[:2] + var_map[instr[2]])
-        else:
-            instrs_new.append(instr)
+        instrs_new.append(instr)
     return instrs_new
 
 
@@ -208,7 +279,8 @@ def simplify_block(instrs):
     instrs = sa_include_flag_deps(instrs)
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
-    # XXX expression simplification
+    # XXX memory constant elimination
+    instrs = sa_expr_simp(instrs)
     instrs = sa_copy_propogate(instrs)
     instrs = sa_dead_code_elim(instrs, (
         'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
