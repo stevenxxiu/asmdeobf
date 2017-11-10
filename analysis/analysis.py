@@ -277,7 +277,8 @@ def sa_mem_elim(instrs):
                 # we know the value, so don't need to read from memory
                 instr = (instr[0], '=') + mem_values[(offset, size)]
             else:
-                # we don't know the value, in this case any write could have written the value, so clear cache
+                # we don't know the value, in this case some write could have written the value, looking into this
+                # further is not really necessary, we just suppose all writes are useful
                 mem_instrs.clear()
         instrs_new.append(instr)
     instrs = instrs_new
