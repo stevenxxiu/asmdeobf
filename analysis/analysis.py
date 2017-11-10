@@ -356,7 +356,6 @@ def simplify_block(instrs):
             'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
             'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
         ))
-    instrs = sa_mem_elim(instrs)
     return sa_pprint(instrs)
 
 
