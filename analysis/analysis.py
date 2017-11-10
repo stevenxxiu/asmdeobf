@@ -209,11 +209,9 @@ def sa_copy_propagate(instrs):
                 part = var_map[part]
             parts.append(part)
         instr = instr[:2] + tuple(parts)
-
         # memory write
         if instr[1].endswith(']=') and instr[0] in var_map:
             instr = (var_map[instr[0]],) + instr[1:]
-
         # store propagated var
         if len(instr) == 3 and instr[1] == '=':
             var_map[instr[0]] = instr[2]
