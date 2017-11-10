@@ -7,7 +7,7 @@ def pd_extract_esil(s):
     '''
     Extracts esil string from a line of disasm (from pd command). Requires `e asm.esil=true`.
     '''
-    return s.split('\n')[-1][43:].split(';')[0]
+    return s.split('\n')[-1][43:].split(';')[0].strip()
 
 
 def is_var(name):
@@ -18,7 +18,7 @@ def esil_to_sa(instrs):
     '''
     Convert to sa form: (dest, assign_op, ...src).
     '''
-    instrs = [part for instr in instrs for part in instr.strip().split(',')]
+    instrs = [part for instr in instrs for part in instr.split(',')]
     instrs_new = []
     instr_stack = []
     tmp_num = 0
@@ -313,7 +313,11 @@ def main():
 
         instrs = []
         for i in range(106):
-            instrs.append(pd_extract_esil(r.cmd(f'pd 1 @ {r.cmd("aer eip")}')))
+            eip = r.cmd('aer eip')
+            if r.cmd(f'p8j 1 @ {eip}') == '[232]':
+                # add additional esil instruction for call
+                instrs.append(f'{int(eip, 16) + 5},eip,=')
+            instrs.append(pd_extract_esil(r.cmd(f'pd 1 @ {eip}')))
             r.cmd('aes')
         print(simplify_block(instrs))
     finally:
