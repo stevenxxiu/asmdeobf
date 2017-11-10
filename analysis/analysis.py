@@ -236,15 +236,15 @@ def sa_const_fold(instrs):
 
 def sa_mem_elim(instrs):
     '''
-    Track and eliminates useless memory reads and writes. We track the memory of a single register (with its offsets) at
-    a time. We are conservative and don't assume register bounds.
+    Track and eliminates useless memory reads and writes. We track the memory of a register with its offsets. We are
+    conservative and don't assume register bounds.
     '''
     # track memory accesses and replace known memory values
     instrs_new = []
     var_map = {}  # maps `r2` to `(r1, 5)` if we have `r2 = r1 + 5`
-    mem_var = None  # current var memory accesses are based upon
-    mem_instrs = {}  # maps var offset to instruction which wrote to it, to eliminate dead writes
-    mem_values = {}  # maps var offset to value
+    mem_var = None  # current var memory values are based upon
+    mem_values = defaultdict(dict)  # {(offset, size): value}
+    mem_instrs = defaultdict(dict)  # {(var_, offset, size): instr_i}, eliminates dead writes
     dead_instrs = set()
     for i, instr in enumerate(instrs):
         if instr[1] == '=' and instr[2] in ('+', '-') and isinstance(instr[4], int):
@@ -255,38 +255,30 @@ def sa_mem_elim(instrs):
         elif instr[1].endswith(']='):
             var_, offset = var_map.get(instr[0], (None, 0))
             size = int(instr[1][1:-2])
-            if var_ is None or var_ != mem_var:
-                # invalidate all caches since unknown where this wrote to
+            if var_ == mem_var and var_ is not None:
+                # invalidate value cache which overlaps
+                for cache_offset, cache_size in list(mem_values):
+                    if offset < cache_offset + cache_size and cache_offset < offset + size:
+                        mem_values.pop((cache_offset, cache_size))
+            else:
+                # invalidate value cache since var has changed
                 mem_var = var_
-                mem_instrs.clear()
                 mem_values.clear()
-            elif var_ is not None:
-                # check for dead writes
-                if (offset, size) in mem_instrs:
-                    dead_instrs.add(mem_instrs[(offset, size)])
-                else:
-                    # invalidate caches of memory writes which overlap
-                    for cache_offset, cache_size in list(mem_instrs):
-                        if offset < cache_offset + cache_size and cache_offset < offset + size:
-                            mem_instrs.pop((cache_offset, cache_size))
-                            mem_values.pop((cache_offset, cache_size))
-            mem_instrs[(offset, size)] = i
-            mem_values[(offset, size)] = instr[2:]
+            if var_ is not None:
+                # check for dead writes and store new value
+                if (var_, offset, size) in mem_instrs:
+                    dead_instrs.add(mem_instrs[(var_, offset, size)])
+                mem_instrs[(var_, offset, size)] = i
+                mem_values[(offset, size)] = instr[2:]
         elif instr[1].startswith('=[') and len(instr) == 3:
             var_, offset = var_map.get(instr[2], (None, 0))
             size = int(instr[1][2:-1])
-            if var_ is None or var_ != mem_var:
-                # all writes so far are useful if a read address is unknown
+            if var_ == mem_var and var_ is not None and (offset, size) in mem_values:
+                # we know the value, so don't need to read from memory
+                instr = (instr[0], '=') + mem_values[(offset, size)]
+            else:
+                # we don't know the value, in this case any write could have written the value, so clear cache
                 mem_instrs.clear()
-            elif var_ is not None:
-                # check if we know the value
-                if (offset, size) in mem_values:
-                    instr = (instr[0], '=') + mem_values[(offset, size)]
-                else:
-                    # invalidate caches of memory writes which overlap
-                    for cache_offset, cache_size in list(mem_instrs):
-                        if offset < cache_offset + cache_size and cache_offset < offset + size:
-                            mem_instrs.pop((cache_offset, cache_size))
         instrs_new.append(instr)
     instrs = instrs_new
 
