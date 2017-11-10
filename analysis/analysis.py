@@ -224,12 +224,20 @@ def sa_const_fold(instrs):
     '''
     Constant folding.
     '''
-    return instrs
+    instrs_new = []
+    for instr in instrs:
+        if instr[2] == '+' and isinstance(instr[3], int) and isinstance(instr[4], int):
+            instr = instr[:2] + (instr[3] + instr[4],)
+        elif instr[2] == '-' and isinstance(instr[3], int) and isinstance(instr[4], int):
+            instr = instr[:2] + (instr[3] - instr[4],)
+        instrs_new.append(instr)
+    return instrs_new
 
 
 def sa_mem_elim(instrs):
     '''
-    Track and eliminates useless memory writes. We are conservative and don't assume anything about registers.
+    Track and eliminates useless memory reads and writes. We track the memory of a single register (with its offsets) at
+    a time. We are conservative and don't assume register bounds.
     '''
     # track memory accesses and replace known memory values
     instrs_new = []
