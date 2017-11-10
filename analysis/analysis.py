@@ -157,7 +157,6 @@ def sa_expr_simp(instrs):
     # simplify expressions involving a + 1, a - 1
     instrs_new = []
     var_map = {}
-    expr_map = {}
     for instr in instrs:
         if instr[2] in ('+', '-'):
             vars_ = []
@@ -184,20 +183,28 @@ def sa_expr_simp(instrs):
                 else:
                     instr = instr[:2] + (expr_1[1],)
 
-            # re-use expression if it already exists
-            if instr[2:] in expr_map:
-                instr = instr[:2] + (expr_map[instr[2:]],)
-
         instrs_new.append(instr)
 
         # store simplified expression
         if instr[1] == '=':
-            if len(instr) == 3:
+            if len(instr) == 3 or (instr[2] in ('+', '-') and isinstance(instr[4], int)):
                 var_map[instr[0]] = instr[2:]
-            if instr[2] in ('+', '-') and isinstance(instr[4], int):
-                var_map[instr[0]] = instr[2:]
-                expr_map[instr[2:]] = instr[0]
 
+    return instrs_new
+
+
+def sa_common_subexpr(instrs):
+    '''
+    Common sub-expression elimination.
+    '''
+    instrs_new = []
+    expr_map = {}
+    for instr in instrs:
+        if instr[2:] in expr_map:
+            instr = instr[:2] + (expr_map[instr[2:]],)
+        instrs_new.append(instr)
+        if instr[1] == '=':
+            expr_map[instr[2:]] = instr[0]
     return instrs_new
 
 
@@ -287,6 +294,7 @@ def simplify_block(instrs):
     instrs = sa_to_ssa(instrs)
     # XXX memory constant elimination
     instrs = sa_expr_simp(instrs)
+    instrs = sa_common_subexpr(instrs)
     instrs = sa_copy_propagate(instrs)
     instrs = sa_dead_code_elim(instrs, (
         'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
