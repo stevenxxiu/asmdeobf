@@ -159,18 +159,8 @@ def sa_expr_simp(instrs):
     var_map = {}
     for instr in instrs:
         if instr[2] in ('+', '-'):
-            vars_ = []
-
-            # replace constant vars
-            for var_ in instr[3:]:
-                if var_ in var_map and len(var_map[var_]) == 1:
-                    var_ = var_map[var_][0]
-                vars_.append(var_)
-            instr = instr[:3] + tuple(vars_)
-
-            # simplify expressions
             var_ = instr[3]
-            if var_ in var_map and len(var_map[var_]) == 3 and isinstance(instr[4], int):
+            if var_ in var_map:
                 expr_1 = var_map[var_]
                 int_1 = -expr_1[2] if expr_1[0] == '-' else expr_1[2]
                 expr_2 = instr[2:]
@@ -182,14 +172,9 @@ def sa_expr_simp(instrs):
                     instr = instr[:2] + ('-', expr_1[1], -int_res)
                 else:
                     instr = instr[:2] + (expr_1[1],)
-
         instrs_new.append(instr)
-
-        # store simplified expression
-        if instr[1] == '=':
-            if len(instr) == 3 or (instr[2] in ('+', '-') and isinstance(instr[4], int)):
-                var_map[instr[0]] = instr[2:]
-
+        if instr[1] == '=' and instr[2] in ('+', '-') and isinstance(instr[4], int):
+            var_map[instr[0]] = instr[2:]
     return instrs_new
 
 
@@ -294,8 +279,9 @@ def simplify_block(instrs):
     instrs = sa_to_ssa(instrs)
     # XXX memory constant elimination
     instrs = sa_expr_simp(instrs)
-    instrs = sa_common_subexpr(instrs)
-    instrs = sa_copy_propagate(instrs)
+    for i in range(2):
+        instrs = sa_common_subexpr(instrs)
+        instrs = sa_copy_propagate(instrs)
     instrs = sa_dead_code_elim(instrs, (
         'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
         'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
