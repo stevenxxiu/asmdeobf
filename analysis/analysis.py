@@ -145,7 +145,7 @@ def sa_to_ssa(instrs):
 
 
 def sa_expr_simp(instrs):
-    # replace a ^ a with 0
+    # replace `r1 ^ r1` with 0
     instrs_new = []
     for instr in instrs:
         if instr[2] == '^' and instr[3] == instr[4]:
@@ -154,7 +154,7 @@ def sa_expr_simp(instrs):
             instrs_new.append(instr)
     instrs = instrs_new
 
-    # simplify expressions involving a + 1, a - 1
+    # simplify expressions involving `r1 + 1`, `r1 - 1`
     instrs_new = []
     var_map = {}
     for instr in instrs:
@@ -195,7 +195,8 @@ def sa_common_subexpr(instrs):
 
 def sa_copy_propagate(instrs):
     '''
-    This only copys variables and not expressions. Otherwise the following will not be simpler:
+    This only copies variables and not expressions. Otherwise the following will not be simpler:
+
         r2 = r1 + 1
         r3 = r2
     '''
@@ -216,6 +217,76 @@ def sa_copy_propagate(instrs):
         if len(instr) == 3 and instr[1] == '=':
             var_map[instr[0]] = instr[2]
         instrs_new.append(instr)
+    return instrs_new
+
+
+def sa_const_fold(instrs):
+    '''
+    Constant folding.
+    '''
+    return instrs
+
+
+def sa_mem_elim(instrs):
+    '''
+    Track and eliminates useless memory writes. We are conservative and don't assume anything about registers.
+    '''
+    # track memory accesses and replace known memory values
+    instrs_new = []
+    var_map = {}  # maps `r2` to `(r1, 5)` if we have `r2 = r1 + 5`
+    mem_var = None  # current var memory accesses are based upon
+    mem_instrs = {}  # maps var offset to instruction which wrote to it, to eliminate dead writes
+    mem_values = {}  # maps var offset to value
+    dead_instrs = set()
+    for i, instr in enumerate(instrs):
+        if instr[1] == '=' and instr[2] in ('+', '-') and isinstance(instr[4], int):
+            if instr[2] == '+':
+                var_map[instr[0]] = instr[3], instr[4]
+            else:
+                var_map[instr[0]] = instr[3], -instr[4]
+        elif instr[1].endswith(']='):
+            var_, offset = var_map.get(instr[0], (None, 0))
+            if var_ is None or var_ != mem_var:
+                # invalidate all caches since unknown where this wrote to
+                mem_var = var_
+                mem_instrs.clear()
+                mem_values.clear()
+            elif var_ is not None:
+                # check for dead writes
+                size = int(instr[1][1:-2])
+                if (offset, size) in mem_instrs:
+                    dead_instrs.add(mem_instrs[(offset, size)])
+                else:
+                    # invalidate caches of memory writes which overlap
+                    for cache_offset, cache_size in list(mem_instrs):
+                        if offset < cache_offset + cache_size and cache_offset < offset + size:
+                            mem_instrs.pop((cache_offset, cache_size))
+                            mem_values.pop((cache_offset, cache_size))
+                mem_instrs[(offset, size)] = i
+                mem_values[(offset, size)] = instr[2:]
+        elif instr[1].startswith('=[') and len(instr) == 3:
+            var_, offset = var_map.get(instr[2], (None, 0))
+            if var_ is None or var_ != mem_var:
+                # all writes so far are useful if a read address is unknown
+                mem_instrs.clear()
+            elif var_ is not None:
+                # check if we know the value
+                size = int(instr[1][2:-1])
+                if (offset, size) in mem_values:
+                    instr = (instr[0], '=') + mem_values[(offset, size)]
+                else:
+                    # invalidate caches of memory writes which overlap
+                    for cache_offset, cache_size in list(mem_instrs):
+                        if offset < cache_offset + cache_size and cache_offset < offset + size:
+                            mem_instrs.pop((cache_offset, cache_size))
+        instrs_new.append(instr)
+    instrs = instrs_new
+
+    # remove dead writes
+    instrs_new = []
+    for i, instr in enumerate(instrs):
+        if i not in dead_instrs:
+            instrs_new.append(instr)
     return instrs_new
 
 
@@ -275,15 +346,16 @@ def simplify_block(instrs):
     instrs = sa_include_flag_deps(instrs)
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
-    # XXX memory constant elimination
     instrs = sa_expr_simp(instrs)
-    for i in range(2):
+    for i in range(3):
         instrs = sa_common_subexpr(instrs)
         instrs = sa_copy_propagate(instrs)
-    instrs = sa_dead_code_elim(instrs, (
-        'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
-        'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-    ))
+        instrs = sa_const_fold(instrs)
+        instrs = sa_mem_elim(instrs)
+        instrs = sa_dead_code_elim(instrs, (
+            'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
+            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+        ))
     return sa_pprint(instrs)
 
 

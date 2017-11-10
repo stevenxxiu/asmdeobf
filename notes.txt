@@ -1,6 +1,6 @@
 # Analysis
 The binary is not packed. In order to analyze it, as a first attempt we use radare to emulate a block of instructions until we meet some api call. An assumption we make for each block is that the code is not self-modifying, i.e. there are no memory writes to code that is already run in the current block.
 
-Radeco only works on linux. For convenience of python we code own ssa form/constant propagation (including stack for additional simplification). After ssa form assign back to variables at the end of block.
+Radeco only works on linux. For convenience of python we code own ssa form/simplification routines.
 
 To track conditional branching, see if radare esil supports unknowns and taint analysis, or alternatively check which branches are not taken for certain (perhaps rest of code is not self-modifying). The block analysis would look something like ida's analysis and generate a graph. To better locate where blocks are and what we have missing do block coverage (e.g. less than 1% of block is not run out of all addresses).
