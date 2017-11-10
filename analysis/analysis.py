@@ -254,6 +254,7 @@ def sa_mem_elim(instrs):
                 var_map[instr[0]] = instr[3], -instr[4]
         elif instr[1].endswith(']='):
             var_, offset = var_map.get(instr[0], (None, 0))
+            size = int(instr[1][1:-2])
             if var_ is None or var_ != mem_var:
                 # invalidate all caches since unknown where this wrote to
                 mem_var = var_
@@ -261,7 +262,6 @@ def sa_mem_elim(instrs):
                 mem_values.clear()
             elif var_ is not None:
                 # check for dead writes
-                size = int(instr[1][1:-2])
                 if (offset, size) in mem_instrs:
                     dead_instrs.add(mem_instrs[(offset, size)])
                 else:
@@ -270,16 +270,16 @@ def sa_mem_elim(instrs):
                         if offset < cache_offset + cache_size and cache_offset < offset + size:
                             mem_instrs.pop((cache_offset, cache_size))
                             mem_values.pop((cache_offset, cache_size))
-                mem_instrs[(offset, size)] = i
-                mem_values[(offset, size)] = instr[2:]
+            mem_instrs[(offset, size)] = i
+            mem_values[(offset, size)] = instr[2:]
         elif instr[1].startswith('=[') and len(instr) == 3:
             var_, offset = var_map.get(instr[2], (None, 0))
+            size = int(instr[1][2:-1])
             if var_ is None or var_ != mem_var:
                 # all writes so far are useful if a read address is unknown
                 mem_instrs.clear()
             elif var_ is not None:
                 # check if we know the value
-                size = int(instr[1][2:-1])
                 if (offset, size) in mem_values:
                     instr = (instr[0], '=') + mem_values[(offset, size)]
                 else:
@@ -364,6 +364,7 @@ def simplify_block(instrs):
             'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
             'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
         ))
+    instrs = sa_mem_elim(instrs)
     return sa_pprint(instrs)
 
 
