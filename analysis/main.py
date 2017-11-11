@@ -9,16 +9,12 @@ def extract_esil(r, addr):
     '''
     Get esil at addr. Requires `e asm.esil=true`.
     '''
-    res = ''
-    if r.cmd(f'p8j 1 @ {addr}') == '[232]':
-        # need to update eip before call
-        res = f'{addr + 5},eip,=,'
-    pd = r.cmd(f'pd 1 @ {addr}')
-    res += pd.split('\n')[-1][43:].split(';')[0].strip()
-    return res
+    # update eip to facilitate analysis of conditional jmps and call
+    res = r.cmdj(f'pdj 1 @ {addr}')[0]
+    return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
 
-def extract_func(r, start_addr, init_block, funcs):
+def extract_func(r, start_addr, funcs, oep_func=False):
     blocks = []
     cur_addr = start_addr
     while True:
@@ -28,30 +24,54 @@ def extract_func(r, start_addr, init_block, funcs):
         r.cmd('aeim')
         r.cmd('aeip')
         instrs = []
+        flag_vals = {}
         while True:
             cur_addr = int(r.cmd('aer eip'), 16)
-            esil = extract_esil(r, cur_addr)
-            instrs.append(esil)
+            instr = extract_esil(r, cur_addr)
+            instrs.append(instr)
 
-            # check if jump is conditional
-            if not init_block:
-                if False:
-                    raise NotImplementedError('conditional jmp')
+            # check if jump is actually conditional, if not oep block
+            if not oep_func or blocks:
+                for flag in re.findall(r'\b(\wf),=', instr):
+                    flag_vals[flag] = None
+                if re.match(r'\d+,eip,=,(\w+),\1,\^=', instr):
+                    flag_vals['zf'] = 0
+                matches = re.match(r'\d+,eip,=,(\wf),(!,)?\?{', instr)
+                if matches:
+                    is_conditional = True
+                    flag = matches.group(1)
+                    # flag is constant
+                    if is_conditional and flag_vals.get(flag) is not None:
+                        is_conditional = False
+                    # jmp address is same regardless of flag
+                    if is_conditional:
+                        jmp_addrs = {}
+                        for flag_val in True, False:
+                            while True:
+                                jmp_instr = extract_esil(r, cur_addr)
+                                matches = re.match(r'(\d+),eip,=,(\wf),\?{,(\d+),eip,=,}', instr)
+
+
+                    if is_conditional:
+                        raise NotImplementedError('conditional jmp')
 
             # check if instruction is a call to api
-            if re.match(r'\d+,eip,=,eip,4,esp,-=,esp,=\[\],\d+,eip,=', esil):
-                call_addr = int(esil.split(',')[-3])
-                if extract_esil(r, call_addr) == 'eip,=':
+            matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],\d+,eip,=', instr)
+            if matches:
+                call_addr = int(instr.split(',')[-3])
+                if re.match(r'\d+,eip,=,0x[\d0-f]+,\[\],eip,=', extract_esil(r, call_addr)):
                     # add call as new block to aid de-obfuscation
                     blocks.append(instrs)
                     # go to return address
-                    cur_addr += 5
+                    cur_addr = int(matches.group(1))
                     break
 
             # check if instruction is a call to a proc
+            # check if function was already analyzed
 
             # check if esp is the same, i.e. function has returned
-            if cur_addr == 0x00401DFB:
+            if cur_addr == 0x00401E6E:
+                blocks.append(instrs)
                 funcs[start_addr] = blocks
                 return
             r.cmd('aes')
@@ -59,7 +79,7 @@ def extract_func(r, start_addr, init_block, funcs):
 
 def extract_funcs(r, addr):
     funcs = {}
-    extract_func(r, addr, True, funcs)
+    extract_func(r, addr, funcs, True)
     return funcs
 
 
