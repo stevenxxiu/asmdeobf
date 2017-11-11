@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-__all__ = ['simplify_block']
+__all__ = ['simplify_block', 'sa_pprint']
 
 
 def is_var(name):
@@ -341,7 +341,8 @@ def simplify_block(instrs):
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
     instrs = sa_expr_simp(instrs)
-    for i in range(3):
+    while True:
+        prev_len = len(instrs)
         instrs = sa_common_subexpr(instrs)
         instrs = sa_copy_propagate(instrs)
         instrs = sa_const_fold(instrs)
@@ -350,4 +351,6 @@ def simplify_block(instrs):
             'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
             'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
         ))
-    return sa_pprint(instrs)
+        if len(instrs) == prev_len:
+            break
+    return instrs
