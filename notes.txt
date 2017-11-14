@@ -3,4 +3,13 @@ The binary is not packed. In order to analyze it, as a first attempt we use rada
 
 Radeco only works on linux. For convenience of python we code own ssa form/simplification routines.
 
-To track conditional branching, see if radare esil supports unknowns and taint analysis, or alternatively check which branches are not taken for certain (perhaps rest of code is not self-modifying). The block analysis would look something like ida's analysis and generate a graph. To better locate where blocks are and what we have missing do block coverage (e.g. less than 1% of block is not run out of all addresses).
+# Extracting CFG
+For simplicity of analysis, we suppose only the first block is self-modifying, which appears to be relatively true.
+
+To extract a cfg, we track conditional branching through DFS. Any call is in its own separate block to facilitate block-by-block deobfuscation. Conditional branches that are taken for certain (jz when zf == 0) are ignored, as the other dest can be invalid code.
+
+XXX It's better to perform control flow simplification in the cfg pass, and include all control blocks
+
+The result of the block analysis would look something like ida's analysis and generate a graph.
+
+To better locate where blocks are and what we have missing do block coverage (e.g. less than 1% of block is not run out of all addresses).

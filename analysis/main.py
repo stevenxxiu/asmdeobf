@@ -5,6 +5,12 @@ import r2pipe
 from analysis.block import simplify_block, sa_pprint
 
 
+class Block:
+    addrs = []
+    instrs = []
+    children = []
+
+
 def extract_esil(r, addr):
     '''
     Get esil at addr. Requires `e asm.esil=true`.
@@ -14,56 +20,70 @@ def extract_esil(r, addr):
     return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
 
-def extract_func(r, start_addr, funcs, oep_func=False):
-    blocks = []
-    cur_addr = start_addr
-    while True:
+def extract_func(r, start_addr, funcs, is_oep_func=False):
+    addr_map = {}  # {addr: (block, i)}
+    stack = [(start_addr, {})]  # [(addr, flags)]
+    is_oep_block = is_oep_func
+
+    while stack:
+        cur_addr, flag_vals = stack.pop()
+
+        # if address is already found (through conditional jmps) then split block in two
+        if cur_addr in addr_map:
+            block, i = addr_map[cur_addr]
+            new_block = Block()
+            new_block.addrs = block.addrs[:i]
+            new_block.instrs = block.instrs[:i]
+            for j, addr in enumerate(new_block.addrs):
+                addr_map[addr] = (new_block, j)
+            new_block.children = [block]
+            block.addrs = block.addrs[i:]
+            block.instrs = block.instrs[i:]
+            for j, addr in enumerate(block.addrs):
+                addr_map[addr] = (block, j)
+            continue
+
+        block = Block()
+
         # emulate block
         r.cmd(f's {cur_addr}')
         r.cmd('aei')
         r.cmd('aeim')
         r.cmd('aeip')
-        instrs = []
-        flag_vals = {}
+
+        # update emulator flag values
+        for flag, val in flag_vals.items():
+            if val is not None:
+                r.cmd(f'aer {flag}={val}')
+
         while True:
             cur_addr = int(r.cmd('aer eip'), 16)
             instr = extract_esil(r, cur_addr)
-            instrs.append(instr)
+            addr_map[cur_addr] = (block, len(block.instrs))
+            block.addrs.append(cur_addr)
+            block.instrs.append(instr)
 
-            # check if jump is actually conditional, if not oep block
-            if not oep_func or blocks:
-                for flag in re.findall(r'\b(\wf),=', instr):
-                    flag_vals[flag] = None
-                if re.match(r'\d+,eip,=,(\w+),\1,\^=', instr):
-                    flag_vals['zf'] = 0
-                matches = re.match(r'\d+,eip,=,(\wf),(!,)?\?{', instr)
-                if matches:
-                    is_conditional = True
-                    flag = matches.group(1)
-                    # flag is constant
-                    if is_conditional and flag_vals.get(flag) is not None:
-                        is_conditional = False
-                    # jmp address is same regardless of flag
-                    if is_conditional:
-                        jmp_addrs = {}
-                        for flag_val in True, False:
-                            while True:
-                                jmp_instr = extract_esil(r, cur_addr)
-                                matches = re.match(r'(\d+),eip,=,(\wf),\?{,(\d+),eip,=,}', instr)
+            # update certain flag values for conditional branches
+            for flag, value in re.findall(r'\b(\wf),=(\$\w+)', instr):
+                flag_vals[flag] = 0 if value == '$0' else 1 if value == '$1' else None
+            if re.match(r'\d+,eip,=,(\w+),\1,\^=', instr):
+                flag_vals['zf'] = 0
 
-
-                    if is_conditional:
-                        raise NotImplementedError('conditional jmp')
+            # check if we have a conditional jmp
+            matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
+            if matches and not is_oep_block:
+                if flag_vals.get(matches.group(1), None) is None:
+                    stack.append((int(matches.group(1)), {}))
+                    stack.append((int(matches.group(4)), {}))
+                    break
 
             # check if instruction is a call to api
             matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],\d+,eip,=', instr)
             if matches:
                 call_addr = int(instr.split(',')[-3])
                 if re.match(r'\d+,eip,=,0x[\d0-f]+,\[\],eip,=', extract_esil(r, call_addr)):
-                    # add call as new block to aid de-obfuscation
-                    blocks.append(instrs)
-                    # go to return address
-                    cur_addr = int(matches.group(1))
+                    # end current block to aid in de-obfuscation
+                    stack.append((int(matches.group(1)), {}))
                     break
 
             # check if instruction is a call to a proc
@@ -71,10 +91,14 @@ def extract_func(r, start_addr, funcs, oep_func=False):
 
             # check if esp is the same, i.e. function has returned
             if cur_addr == 0x00401E6E:
-                blocks.append(instrs)
-                funcs[start_addr] = blocks
-                return
+                stack.pop()
+                break
+
             r.cmd('aes')
+
+    block = addr_map[start_addr][0]
+    funcs[start_addr] = block
+    return block
 
 
 def extract_funcs(r, addr):
