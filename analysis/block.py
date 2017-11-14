@@ -44,6 +44,7 @@ def esil_to_sa(instrs):
         elif instr == '=':
             instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
         elif instr.startswith('=['):
+            # write to memory
             dest = instr_stack.pop()
             src = instr_stack.pop()
             size = instr[2:-1]
@@ -59,6 +60,7 @@ def esil_to_sa(instrs):
             instr_stack.append(f'tmp_{tmp_num}')
             tmp_num += 1
         elif instr in ('[1]', '[2]', '[4]'):
+            # read from memory
             instrs_new.append((f'tmp_{tmp_num}', f'={instr}', instr_stack.pop()))
             instr_stack.append(f'tmp_{tmp_num}')
             tmp_num += 1

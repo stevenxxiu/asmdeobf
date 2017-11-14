@@ -6,9 +6,15 @@ from analysis.block import simplify_block, sa_pprint
 
 
 class Block:
-    addrs = []
-    instrs = []
-    children = []
+    def __init__(self, addrs=None, instrs=None, children=None):
+        self.addrs = addrs or []
+        self.instrs = instrs or []
+        self.children = children or []
+
+    def __eq__(self, other):
+        if isinstance(self, other.__class__):
+            return self.__dict__ == other.__dict__
+        return False
 
 
 def extract_esil(r, addr):
@@ -56,8 +62,13 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
             if val is not None:
                 r.cmd(f'aer {flag}={val}')
 
+        # special marker for return address 0xFFFFFFFF
+        r.cmd('ae 0xFFFFFFFF,esp,=[4]')
+
         while True:
             cur_addr = int(r.cmd('aer eip'), 16)
+            if cur_addr == 0xFFFFFFFF or cur_addr == 0x00401E6E:
+                break
             instr = extract_esil(r, cur_addr)
             addr_map[cur_addr] = (block, len(block.instrs))
             block.addrs.append(cur_addr)
@@ -72,9 +83,11 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
             # check if we have a conditional jmp
             matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
             if matches and not is_oep_block:
-                if flag_vals.get(matches.group(1), None) is None:
-                    stack.append((int(matches.group(1)), {}))
-                    stack.append((int(matches.group(4)), {}))
+                flag = matches.group(2)
+                is_negated = bool(matches.group(3))
+                if flag_vals.get(flag, None) is None:
+                    stack.append((int(matches.group(1)), {flag: not is_negated}))
+                    stack.append((int(matches.group(4)), {flag: is_negated}))
                     break
 
             # check if instruction is a call to api
@@ -88,11 +101,6 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
 
             # check if instruction is a call to a proc
             # check if function was already analyzed
-
-            # check if esp is the same, i.e. function has returned
-            if cur_addr == 0x00401E6E:
-                stack.pop()
-                break
 
             r.cmd('aes')
 
