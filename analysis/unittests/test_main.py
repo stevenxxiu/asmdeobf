@@ -9,7 +9,7 @@ class MockRadare:
     def __init__(self, instrs, base_addr):
         self.instrs = instrs
         self.base_addr = base_addr
-        self.regs = {'eax': 1, 'eip': 0, 'esp': 0}
+        self.regs = {'eax': 1, '$z': 0, 'eip': 0, 'esp': 0}
         self.mem = [0] * 64
 
     def _conv_val(self, val):
@@ -38,6 +38,8 @@ class MockRadare:
                 'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
             ):
                 instr_stack.append(instr)
+            elif instr.startswith('$'):
+                instr_stack.append(self.regs[instr])
             elif instr == '=':
                 reg, val = instr_stack.pop(), instr_stack.pop()
                 self.regs[reg] = self._conv_val(val)
@@ -171,6 +173,25 @@ class TestExtractFuncs(unittest.TestCase):
                 '101,eip,=,eax,eax,^=',
                 '102,eip,=,zf,?{,103,eip,=,}',
                 '103,eip,=,eax,1,=',
+                '104,eip,=,esp,[4],eip,=,4,esp,+=',
+            ], []),
+        })
+
+    def test_no_cond_jmp_no_longer_const(self):
+        r = MockRadare(textwrap.dedent('''
+            eax,eax,^=
+            $z,zf,=
+            zf,?{,103,eip,=,}
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = extract_funcs(r, 100, is_oep_func=False)
+        self.assertEqual(funcs[100], {
+            100: Block([
+                '101,eip,=,eax,eax,^=',
+                '102,eip,=,$z,zf,=',
+                '103,eip,=,zf,?{,103,eip,=,}',
+            ], [103, 103]),
+            103: Block([
                 '104,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
         })

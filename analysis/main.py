@@ -73,7 +73,7 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
             block.instrs.append(instr)
 
             # update certain flag values for conditional branches
-            for flag, value in re.findall(r'\b(\wf),=(\$\w+)', instr):
+            for value, flag in re.findall(r'(\$\w+),(\wf),=', instr):
                 flag_vals[flag] = 0 if value == '$0' else 1 if value == '$1' else None
             if re.match(r'\d+,eip,=,(\w+),\1,\^=', instr):
                 flag_vals['zf'] = 0
