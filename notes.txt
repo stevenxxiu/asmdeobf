@@ -8,8 +8,6 @@ For simplicity of analysis, we suppose only the first block is self-modifying, w
 
 To extract a cfg, we track conditional branching through DFS. Any call is in its own separate block to facilitate block-by-block deobfuscation. Conditional branches that are taken for certain (jz when zf == 0) are ignored, as the other dest can be invalid code.
 
-XXX It's better to perform control flow simplification in the cfg pass, and include all control blocks
-
 The result of the block analysis would look something like ida's analysis and generate a graph.
 
 To better locate where blocks are and what we have missing do block coverage (e.g. less than 1% of block is not run out of all addresses).

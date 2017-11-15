@@ -1,0 +1,3 @@
+
+- It's better to perform control flow simplification in the cfg pass, and include all control blocks
+- Revert back from ssa form after deobfuscation for ease of reading

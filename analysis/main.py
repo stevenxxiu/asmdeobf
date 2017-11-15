@@ -6,8 +6,7 @@ from analysis.block import simplify_block, sa_pprint
 
 
 class Block:
-    def __init__(self, addrs=None, instrs=None, children=None):
-        self.addrs = addrs or []
+    def __init__(self, instrs=None, children=None):
         self.instrs = instrs or []
         self.children = children or []
 
@@ -27,7 +26,8 @@ def extract_esil(r, addr):
 
 
 def extract_func(r, start_addr, funcs, is_oep_func=False):
-    addr_map = {}  # {addr: (block, i)}
+    addr_to_block = {}  # {addr: (block, i)}
+    block_to_addr = {}  # {(block, i): addr}
     stack = [(start_addr, {})]  # [(addr, flags)]
     is_oep_block = is_oep_func
 
@@ -35,18 +35,19 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
         cur_addr, flag_vals = stack.pop()
 
         # if address is already found (through conditional jmps) then split block in two
-        if cur_addr in addr_map:
-            block, i = addr_map[cur_addr]
-            new_block = Block()
-            new_block.addrs = block.addrs[:i]
-            new_block.instrs = block.instrs[:i]
-            for j, addr in enumerate(new_block.addrs):
-                addr_map[addr] = (new_block, j)
-            new_block.children = [block]
-            block.addrs = block.addrs[i:]
+        if addr_to_block.get(cur_addr, (None, 0))[1] != 0:
+            block, i = addr_to_block[cur_addr]
+            n = len(block.instrs)
+            new_block = Block(block.instrs[:i], [cur_addr])
             block.instrs = block.instrs[i:]
-            for j, addr in enumerate(block.addrs):
-                addr_map[addr] = (block, j)
+            for j in range(i):
+                addr_to_block[block_to_addr[(id(block), j)]] = new_block, j
+            for j in range(i, n):
+                addr_to_block[block_to_addr[(id(block), j)]] = block, j - i
+            for j in range(i):
+                block_to_addr[(id(new_block), j)] = block_to_addr.pop((id(block), j))
+            for j in range(i, n):
+                block_to_addr[(id(block), j - i)] = block_to_addr.pop((id(block), j))
             continue
 
         block = Block()
@@ -67,8 +68,8 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
             if cur_addr == 0 or cur_addr == 0x00401E6E:
                 break
             instr = extract_esil(r, cur_addr)
-            addr_map[cur_addr] = (block, len(block.instrs))
-            block.addrs.append(cur_addr)
+            addr_to_block[cur_addr] = (block, len(block.instrs))
+            block_to_addr[(id(block), len(block.instrs))] = cur_addr
             block.instrs.append(instr)
 
             # update certain flag values for conditional branches
@@ -83,8 +84,10 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
                 flag = matches.group(2)
                 is_negated = bool(matches.group(3))
                 if flag_vals.get(flag, None) is None:
-                    stack.append((int(matches.group(1)), {flag: not is_negated}))
-                    stack.append((int(matches.group(4)), {flag: is_negated}))
+                    # explore remaining code first before exploring jmp
+                    stack.append((int(matches.group(4)), {flag: int(is_negated)}))
+                    stack.append((int(matches.group(1)), {flag: int(not is_negated)}))
+                    block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
 
             # check if instruction is a call to api
@@ -101,14 +104,15 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
 
             r.cmd('aes')
 
-    block = addr_map[start_addr][0]
-    funcs[start_addr] = block
-    return block
+    addrs = {start_addr}
+    for block, i in addr_to_block.values():
+        addrs.update(block.children)
+    funcs[start_addr] = {addr: addr_to_block[addr][0] for addr in addrs}
 
 
-def extract_funcs(r, addr):
+def extract_funcs(r, addr, is_oep_func=True):
     funcs = {}
-    extract_func(r, addr, funcs, True)
+    extract_func(r, addr, funcs, is_oep_func)
     return funcs
 
 

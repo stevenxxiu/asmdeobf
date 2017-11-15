@@ -61,7 +61,7 @@ class MockRadare:
         matches = re.match(r'aei|aeim|aeip', cmd)
         if matches:
             return
-        matches = re.match(r'aer (\w+)', cmd)
+        matches = re.match(r'aer (\w+)$', cmd)
         if matches:
             return f'0x{self.regs[matches.group(1)]:08x}'
         matches = re.match(r'aer (\w+)=(\d+)', cmd)
@@ -84,15 +84,63 @@ class MockRadare:
 
 
 class TestExtractFuncs(unittest.TestCase):
-    # XXX for conditional jmps test jmping to existing address and jmping to new address
-
     def test_simple(self):
         r = MockRadare(textwrap.dedent('''
             eax,0,=
             esp,[4],eip,=,4,esp,+=
-        ''').strip().split('\n'), 0x100)
-        funcs = extract_funcs(r, 0x100)
-        self.assertEqual(funcs[0x100], Block([0x100, 0x101], [
-            '257,eip,=,eax,0,=',
-            '258,eip,=,esp,[4],eip,=,4,esp,+='
-        ], []))
+        ''').strip().split('\n'), 100)
+        funcs = extract_funcs(r, 100)
+        self.assertEqual(funcs[100], {
+            100: Block([
+                '101,eip,=,eax,0,=',
+                '102,eip,=,esp,[4],eip,=,4,esp,+='
+            ], []),
+        })
+
+    def test_cond_jmp_existing(self):
+        # test conditional jmp into middle of existing block to break up block
+        r = MockRadare(textwrap.dedent('''
+            eax,0,=
+            eax,1,=
+            eax,2,=
+            zf,?{,101,eip,=,}
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = extract_funcs(r, 100, is_oep_func=False)
+        self.assertEqual(funcs[100], {
+            100: Block([
+                '101,eip,=,eax,0,=',
+            ], [101]),
+            101: Block([
+                '102,eip,=,eax,1,=',
+                '103,eip,=,eax,2,=',
+                '104,eip,=,zf,?{,101,eip,=,}'
+            ], [101, 104]),
+            104: Block([
+                '105,eip,=,esp,[4],eip,=,4,esp,+='
+            ], []),
+        })
+
+    def test_cond_jmp_new(self):
+        # test conditional jmp into new block to break up block
+        r = MockRadare(textwrap.dedent('''
+            eax,0,=
+            zf,?{,103,eip,=,}
+            eax,1,=
+            eax,2,=
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = extract_funcs(r, 100, is_oep_func=False)
+        self.assertEqual(funcs[100], {
+            100: Block([
+                '101,eip,=,eax,0,=',
+                '102,eip,=,zf,?{,103,eip,=,}'
+            ], [103, 102]),
+            102: Block([
+                '103,eip,=,eax,1,=',
+            ], [103]),
+            103: Block([
+                '104,eip,=,eax,2,=',
+                '105,eip,=,esp,[4],eip,=,4,esp,+='
+            ], []),
+        })
