@@ -9,12 +9,18 @@ class MockRadare:
     def __init__(self, instrs, base_addr):
         self.instrs = instrs
         self.base_addr = base_addr
-        self.regs = {'eip': 0, 'esp': 0}
+        self.regs = {'eax': 1, 'eip': 0, 'esp': 0}
         self.mem = [0] * 64
+
+    def _conv_val(self, val):
+        return val if isinstance(val, int) else self.regs[val]
 
     def run_instr(self, instrs):
         instr_stack = []
+        condition = True
         for instr in instrs.split(','):
+            if not condition:
+                continue
             if str.isdecimal(instr):
                 instr_stack.append(int(instr))
             elif instr.startswith('0x'):
@@ -34,20 +40,27 @@ class MockRadare:
                 instr_stack.append(instr)
             elif instr == '=':
                 reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] = val
+                self.regs[reg] = self._conv_val(val)
             elif instr == '+=':
+                # ignores flags for simplicity
                 reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] += val
+                self.regs[reg] += self._conv_val(val)
+            elif instr == '^=':
+                # ignores flags for simplicity except zf
+                reg, val = instr_stack.pop(), instr_stack.pop()
+                self.regs[reg] ^= self._conv_val(val)
+                self.regs['zf'] = self.regs[reg] = 0
             elif instr == '=[4]':
-                addr = instr_stack.pop()
-                addr = addr if isinstance(addr, int) else self.regs[addr]
-                self.mem[addr] = instr_stack.pop()
+                addr, val = instr_stack.pop(), instr_stack.pop()
+                self.mem[self._conv_val(addr)] = val
             elif instr == '[4]':
-                addr = instr_stack.pop()
-                addr = addr if isinstance(addr, int) else self.regs[addr]
-                instr_stack.append(self.mem[addr])
+                instr_stack.append(self.mem[self._conv_val(instr_stack.pop())])
+            elif instr == '?{':
+                condition = self._conv_val(instr_stack.pop())
+            elif instr == '}':
+                condition = True
             else:
-                raise ValueError('instr')
+                raise ValueError('instr', instr)
 
     def cmd(self, cmd):
         matches = re.match(r's (\d+)', cmd)
@@ -74,13 +87,13 @@ class MockRadare:
             self.regs['eip'] += 1  # update eip first as esil assumes its updated
             self.run_instr(instr)
             return
-        raise ValueError('cmd')
+        raise ValueError('cmd', cmd)
 
     def cmdj(self, cmd):
         matches = re.match(r'pdj 1 @ (\d+)', cmd)
         if matches:
             return [{'esil': self.instrs[int(matches.group(1)) - self.base_addr], 'size': 1}]
-        raise ValueError('cmd')
+        raise ValueError('cmd', cmd)
 
 
 class TestExtractFuncs(unittest.TestCase):
@@ -142,5 +155,41 @@ class TestExtractFuncs(unittest.TestCase):
             103: Block([
                 '104,eip,=,eax,2,=',
                 '105,eip,=,esp,[4],eip,=,4,esp,+='
+            ], []),
+        })
+
+    def test_no_cond_jmp_const(self):
+        r = MockRadare(textwrap.dedent('''
+            eax,eax,^=
+            zf,?{,103,eip,=,}
+            eax,1,=
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = extract_funcs(r, 100, is_oep_func=False)
+        self.assertEqual(funcs[100], {
+            100: Block([
+                '101,eip,=,eax,eax,^=',
+                '102,eip,=,zf,?{,103,eip,=,}',
+                '103,eip,=,eax,1,=',
+                '104,eip,=,esp,[4],eip,=,4,esp,+=',
+            ], []),
+        })
+
+    def test_no_cond_jmp_precond(self):
+        r = MockRadare(textwrap.dedent('''
+            zf,?{,102,eip,=,}
+            zf,?{,200,eip,=,}
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = extract_funcs(r, 100, is_oep_func=False)
+        self.assertEqual(funcs[100], {
+            100: Block([
+                '101,eip,=,zf,?{,102,eip,=,}',
+            ], [102, 101]),
+            101: Block([
+                '102,eip,=,zf,?{,200,eip,=,}',
+            ], [102]),
+            102: Block([
+                '103,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
         })

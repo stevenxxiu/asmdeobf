@@ -82,11 +82,11 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
             matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
             if matches and not is_oep_block:
                 flag = matches.group(2)
-                is_negated = bool(matches.group(3))
                 if flag_vals.get(flag, None) is None:
+                    is_negated = bool(matches.group(3))
                     # explore remaining code first before exploring jmp
-                    stack.append((int(matches.group(4)), {flag: int(is_negated)}))
-                    stack.append((int(matches.group(1)), {flag: int(not is_negated)}))
+                    stack.append((int(matches.group(4)), {flag: int(not is_negated)}))
+                    stack.append((int(matches.group(1)), {flag: int(is_negated)}))
                     block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
 

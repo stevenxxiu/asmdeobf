@@ -65,7 +65,7 @@ def esil_to_sa(instrs):
             instr_stack.append(f'tmp_{tmp_num}')
             tmp_num += 1
         else:
-            raise ValueError(instr)
+            raise ValueError('instr', instr)
     return instrs_new
 
 
