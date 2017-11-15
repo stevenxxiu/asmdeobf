@@ -6,8 +6,9 @@ from analysis.main import extract_funcs, Block
 
 
 class MockRadare:
-    def __init__(self, instrs):
+    def __init__(self, instrs, base_addr):
         self.instrs = instrs
+        self.base_addr = base_addr
         self.regs = {'eip': 0, 'esp': 0}
         self.mem = [0] * 64
 
@@ -69,7 +70,7 @@ class MockRadare:
             return
         matches = re.match(r'aes', cmd)
         if matches:
-            instr = self.instrs[self.regs['eip']]
+            instr = self.instrs[self.regs['eip'] - self.base_addr]
             self.regs['eip'] += 1  # update eip first as esil assumes its updated
             self.run_instr(instr)
             return
@@ -78,7 +79,7 @@ class MockRadare:
     def cmdj(self, cmd):
         matches = re.match(r'pdj 1 @ (\d+)', cmd)
         if matches:
-            return [{'esil': self.instrs[int(matches.group(1))], 'size': 1}]
+            return [{'esil': self.instrs[int(matches.group(1)) - self.base_addr], 'size': 1}]
         raise ValueError('cmd')
 
 
@@ -89,9 +90,9 @@ class TestExtractFuncs(unittest.TestCase):
         r = MockRadare(textwrap.dedent('''
             eax,0,=
             esp,[4],eip,=,4,esp,+=
-        ''').strip().split('\n'))
-        funcs = extract_funcs(r, 0)
-        self.assertEqual(funcs[0], Block([0, 1], [
-            '1,eip,=,eax,0,=',
-            '2,eip,=,esp,[4],eip,=,4,esp,+='
+        ''').strip().split('\n'), 0x100)
+        funcs = extract_funcs(r, 0x100)
+        self.assertEqual(funcs[0x100], Block([0x100, 0x101], [
+            '257,eip,=,eax,0,=',
+            '258,eip,=,esp,[4],eip,=,4,esp,+='
         ], []))

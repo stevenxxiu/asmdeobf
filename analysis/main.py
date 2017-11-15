@@ -62,12 +62,9 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
             if val is not None:
                 r.cmd(f'aer {flag}={val}')
 
-        # special marker for return address 0xFFFFFFFF
-        r.cmd('ae 0xFFFFFFFF,esp,=[4]')
-
         while True:
             cur_addr = int(r.cmd('aer eip'), 16)
-            if cur_addr == 0xFFFFFFFF or cur_addr == 0x00401E6E:
+            if cur_addr == 0 or cur_addr == 0x00401E6E:
                 break
             instr = extract_esil(r, cur_addr)
             addr_map[cur_addr] = (block, len(block.instrs))
