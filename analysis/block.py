@@ -338,6 +338,36 @@ def sa_dead_code_elim(instrs, useful_regs):
     return instrs_new
 
 
+def ssa_to_sa(instrs, final_vars):
+    '''
+    Convert back to sa form (i.e. initial and final registers the same).
+    '''
+    instrs_new = []
+    final_vars_used = {}
+    for instr in instrs:
+        if instr[1] in ('=', 'x='):
+            name = instr[0].split('_')[0]
+            if name in final_vars:
+                final_vars_used[name] = instr[0]
+    var_map = {}
+    for var, last_var in final_vars_used.items():
+        var_map[f'{var}_0'] = var
+        var_map[last_var] = var
+    var_num = defaultdict(int)
+    for instr in instrs:
+        parts = []
+        for part in instr:
+            if is_var(part):
+                name = part.split('_')[0]
+                if part not in var_map:
+                    var_map[part] = f'{name}_{var_num[name]}'
+                    var_num[name] += 1
+                part = var_map[part]
+            parts.append(part)
+        instrs_new.append(parts)
+    return instrs_new
+
+
 def sa_pprint(instrs):
     instrs_new = []
     for instr in instrs:
@@ -365,6 +395,10 @@ def simplify_block(block):
     instrs = sa_include_flag_deps(instrs)
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
+    final_vars = (
+        'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
+        'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+    )
     while True:
         prev_len = len(instrs)
         instrs = sa_expr_simp(instrs)
@@ -372,10 +406,8 @@ def simplify_block(block):
         instrs = sa_copy_propagate(instrs)
         instrs = sa_const_fold(instrs)
         instrs = sa_mem_elim(instrs)
-        instrs = sa_dead_code_elim(instrs, (
-            'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
-            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-        ))
+        instrs = sa_dead_code_elim(instrs, final_vars)
         if len(instrs) == prev_len:
             break
+    instrs = ssa_to_sa(instrs, final_vars)
     block.instrs = instrs

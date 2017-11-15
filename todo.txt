@@ -1,5 +1,4 @@
 
 - In control flow simplification, functions with only 1 block and just change the stack can be merged in
-- Revert back from ssa form after deobfuscation for ease of reading (also re-label indexes so they are minimum)
 - To better locate where blocks are and what we have missing do coverage in js (draw as canvas)
 - Present cfg in javascript, the result would look something like ida's analysis and generate a graph, with a list of functions on left panel and accesses on top
