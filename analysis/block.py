@@ -332,11 +332,12 @@ def sa_pprint(instrs):
     return '\n'.join(instrs_new)
 
 
-def simplify_block(instrs):
+def simplify_block(block):
     '''
     Simplifies a block. A block is assumed to have no branches.
     '''
     # remove branch instructions
+    instrs = block.instrs
     instrs = [instr for instr in instrs if '?{' not in instr]
     instrs = esil_to_sa(instrs)
     instrs = sa_include_flag_deps(instrs)
@@ -355,4 +356,4 @@ def simplify_block(instrs):
         ))
         if len(instrs) == prev_len:
             break
-    return instrs
+    block.instrs = instrs

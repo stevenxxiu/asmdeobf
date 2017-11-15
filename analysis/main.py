@@ -6,9 +6,10 @@ from analysis.block import simplify_block, sa_pprint
 
 
 class Block:
-    def __init__(self, instrs=None, children=None):
+    def __init__(self, instrs=None, children=None, condition=None):
         self.instrs = instrs or []
         self.children = children or []
+        self.condition = condition
 
     def __eq__(self, other):
         if isinstance(self, other.__class__):
@@ -65,12 +66,15 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
 
         while True:
             cur_addr = int(r.cmd('aer eip'), 16)
-            if cur_addr == 0 or cur_addr == 0x00401E6E:
+            if cur_addr == 0:
                 break
             instr = extract_esil(r, cur_addr)
             addr_to_block[cur_addr] = (block, len(block.instrs))
             block_to_addr[(id(block), len(block.instrs))] = cur_addr
             block.instrs.append(instr)
+
+            if cur_addr == 0x00401E6E:
+                break
 
             # update certain flag values for conditional branches
             for value, flag in re.findall(r'(\$\w+),(\wf),=', instr):
@@ -87,6 +91,7 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
                     # explore remaining code first before exploring jmp
                     stack.append((int(matches.group(4)), {flag: int(not is_negated)}))
                     stack.append((int(matches.group(1)), {flag: int(is_negated)}))
+                    block.condition = (flag, is_negated)
                     block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
 
@@ -97,12 +102,14 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
                 if re.match(r'\d+,eip,=,0x[\d0-f]+,\[\],eip,=', extract_esil(r, call_addr)):
                     # end current block to aid in de-obfuscation
                     stack.append((int(matches.group(1)), {}))
+                    block.children = [int(matches.group(1))]
                     break
 
             # check if instruction is a call to a proc
             # check if function was already analyzed
 
             r.cmd('aes')
+        is_oep_block = False
 
     addrs = {start_addr}
     for block, i in addr_to_block.values():
@@ -128,19 +135,23 @@ def main():
         r.cmd('e io.cache=true')
 
         # extract funcs
-        funcs = extract_funcs(r, int(r.cmd("aer eip"), 16))
+        funcs = extract_funcs(r, int(r.cmd('aer eip'), 16))
 
         # de-obfuscate blocks
         for func in funcs.values():
-            for i, block in enumerate(func):
-                func[i] = simplify_block(block)
+            for block in func.values():
+                simplify_block(block)
 
         # pretty-print
-        for addr, func in sorted(funcs.items()):
-            print(f'sub_{addr:08x}')
-            for i, block in enumerate(func):
-                print(f'block_{i}')
-                print(sa_pprint(block))
+        for func_addr, func in sorted(funcs.items()):
+            print(f'sub_{func_addr:08x}')
+            for block_addr, block in sorted(func.items()):
+                print(f'block_{block_addr:08x}')
+                print(sa_pprint(block.instrs))
+                if block.condition:
+                    flag, is_negated = block.condition
+                    true_addr, false_addr = block.children[::-1] if is_negated else block.children
+                    print(f'{flag} ? {true_addr:08x} : {false_addr:08x}')
                 print()
 
     finally:

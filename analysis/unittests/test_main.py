@@ -130,7 +130,7 @@ class TestExtractFuncs(unittest.TestCase):
                 '102,eip,=,eax,1,=',
                 '103,eip,=,eax,2,=',
                 '104,eip,=,zf,?{,101,eip,=,}'
-            ], [101, 104]),
+            ], [101, 104], ('zf', False)),
             104: Block([
                 '105,eip,=,esp,[4],eip,=,4,esp,+='
             ], []),
@@ -150,7 +150,7 @@ class TestExtractFuncs(unittest.TestCase):
             100: Block([
                 '101,eip,=,eax,0,=',
                 '102,eip,=,zf,?{,103,eip,=,}'
-            ], [103, 102]),
+            ], [103, 102], ('zf', False)),
             102: Block([
                 '103,eip,=,eax,1,=',
             ], [103]),
@@ -190,7 +190,7 @@ class TestExtractFuncs(unittest.TestCase):
                 '101,eip,=,eax,eax,^=',
                 '102,eip,=,$z,zf,=',
                 '103,eip,=,zf,?{,103,eip,=,}',
-            ], [103, 103]),
+            ], [103, 103], ('zf', False)),
             103: Block([
                 '104,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
@@ -206,7 +206,7 @@ class TestExtractFuncs(unittest.TestCase):
         self.assertEqual(funcs[100], {
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',
-            ], [102, 101]),
+            ], [102, 101], ('zf', False)),
             101: Block([
                 '102,eip,=,zf,?{,200,eip,=,}',
             ], [102]),
