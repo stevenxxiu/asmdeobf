@@ -1,4 +1,5 @@
 
-- In control flow simplification, functions with only 1 block and just change the stack can be merged in
+- Conditional jmp need to restore stack & regs in emu
+- Allow manually specifying functions to be inlined and analysis stop address
 - To better locate where blocks are and what we have missing do coverage in js (draw as canvas)
 - Present cfg in javascript, the result would look something like ida's analysis and generate a graph, with a list of functions on left panel and accesses on top
