@@ -2,7 +2,14 @@ import re
 
 import r2pipe
 
+from analysis.func import simplify_func
 from analysis.block import simplify_block, sa_pprint
+
+
+class Function:
+    def __init__(self, addr, blocks):
+        self.addr = addr
+        self.blocks = blocks
 
 
 class Block:
@@ -114,13 +121,13 @@ def extract_func(r, start_addr, funcs, is_oep_func=False):
     addrs = {start_addr}
     for block, i in addr_to_block.values():
         addrs.update(block.children)
-    funcs[start_addr] = {addr: addr_to_block[addr][0] for addr in addrs}
+    funcs[start_addr] = Function(start_addr, {addr: addr_to_block[addr][0] for addr in addrs})
 
 
 def extract_funcs(r, addr, is_oep_func=True):
     funcs = {}
     extract_func(r, addr, funcs, is_oep_func)
-    return funcs
+    return sorted(funcs.values())
 
 
 def main():
@@ -137,15 +144,19 @@ def main():
         # extract funcs
         funcs = extract_funcs(r, int(r.cmd('aer eip'), 16))
 
+        # simplify func
+        for func in funcs:
+            simplify_func(func)
+
         # de-obfuscate blocks
-        for func in funcs.values():
-            for block in func.values():
+        for func in funcs:
+            for block in func.blocks.values():
                 simplify_block(block)
 
         # pretty-print
-        for func_addr, func in sorted(funcs.items()):
-            print(f'sub_{func_addr:08x}')
-            for block_addr, block in sorted(func.items()):
+        for func in funcs:
+            print(f'sub_{func.addr:08x}')
+            for block_addr, block in sorted(func.blocks.items()):
                 print(f'block_{block_addr:08x}')
                 print(sa_pprint(block.instrs))
                 if block.condition:
