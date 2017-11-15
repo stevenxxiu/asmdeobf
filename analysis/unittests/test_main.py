@@ -105,7 +105,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100)
-        self.assertEqual(funcs[100], {
+        self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,0,=',
                 '102,eip,=,esp,[4],eip,=,4,esp,+='
@@ -122,7 +122,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
-        self.assertEqual(funcs[100], {
+        self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,0,=',
             ], [101]),
@@ -146,7 +146,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
-        self.assertEqual(funcs[100], {
+        self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,0,=',
                 '102,eip,=,zf,?{,103,eip,=,}'
@@ -168,7 +168,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
-        self.assertEqual(funcs[100], {
+        self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,eax,^=',
                 '102,eip,=,zf,?{,103,eip,=,}',
@@ -185,7 +185,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
-        self.assertEqual(funcs[100], {
+        self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,eax,^=',
                 '102,eip,=,$z,zf,=',
@@ -203,7 +203,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
-        self.assertEqual(funcs[100], {
+        self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',
             ], [102, 101], ('zf', False)),

@@ -140,13 +140,27 @@ def sa_to_ssa(instrs):
 
 
 def sa_expr_simp(instrs):
-    # replace `r1 ^ r1` with 0
+    # simplify expressions involving `r1 ^ r2`
     instrs_new = []
+    var_map = {}
     for instr in instrs:
-        if instr[2] == '^' and instr[3] == instr[4]:
-            instrs_new.append(instr[:2] + (0,))
-        else:
-            instrs_new.append(instr)
+        if instr[2] == '^':
+            vars_ = set()
+            for var in instr[3:]:
+                for var_ in var_map.get(var, [var]):
+                    if var_ in vars_:
+                        vars_.remove(var_)
+                    else:
+                        vars_.add(var_)
+            vars_ = tuple(sorted(vars_))
+            var_map[instr[0]] = vars_
+            if len(vars_) == 0:
+                instr = instr[:2] + (0,)
+            elif len(vars_) == 1:
+                instr = instr[:2] + vars_
+            elif len(vars_) == 2:
+                instr = instr[:2] + ('^',) + vars_
+        instrs_new.append(instr)
     instrs = instrs_new
 
     # simplify expressions involving `r1 + 1`, `r1 - 1`
@@ -211,6 +225,10 @@ def sa_copy_propagate(instrs):
         # store propagated var
         if len(instr) == 3 and instr[1] == '=':
             var_map[instr[0]] = instr[2]
+        if len(instr) == 3 and instr[1] == 'x=':
+            var_map[(instr[0], 'x')] = instr[2]
+        if len(instr) == 3 and instr[1] == '=x' and (instr[2], 'x') in var_map:
+            var_map[instr[0]] = var_map[(instr[2], 'x')]
         instrs_new.append(instr)
     return instrs_new
 
@@ -243,38 +261,42 @@ def sa_mem_elim(instrs):
     dead_instrs = set()
     for i, instr in enumerate(instrs):
         if instr[1] == '=' and instr[2] in ('+', '-') and isinstance(instr[4], int):
-            if instr[2] == '+':
-                var_map[instr[0]] = instr[3], instr[4]
-            else:
-                var_map[instr[0]] = instr[3], -instr[4]
+            var_map[instr[0]] = (instr[3], instr[4] if instr[2] == '+' else -instr[4])
         elif instr[1].endswith(']='):
-            var_, offset = var_map.get(instr[0], (None, 0))
+            var = instr[0]
+            var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][1:-2])
-            if var_ == mem_var and var_ is not None:
+            if var == mem_var:
                 # invalidate value cache which overlaps
                 for cache_offset, cache_size in list(mem_values):
                     if offset < cache_offset + cache_size and cache_offset < offset + size:
                         mem_values.pop((cache_offset, cache_size))
             else:
                 # invalidate value cache since var has changed
-                mem_var = var_
+                mem_var = var
                 mem_values.clear()
-            if var_ is not None:
-                # check for dead writes and store new value
-                if (var_, offset, size) in mem_instrs:
-                    dead_instrs.add(mem_instrs[(var_, offset, size)])
-                mem_instrs[(var_, offset, size)] = i
-                mem_values[(offset, size)] = instr[2:]
+            # check for dead writes and store new value
+            if (var, offset, size) in mem_instrs:
+                dead_instrs.add(mem_instrs[(var, offset, size)])
+            mem_instrs[(var, offset, size)] = i
+            mem_values[(offset, size)] = instr[2:]
         elif instr[1].startswith('=[') and len(instr) == 3:
-            var_, offset = var_map.get(instr[2], (None, 0))
+            var = instr[2]
+            var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][2:-1])
-            if var_ == mem_var and var_ is not None and (offset, size) in mem_values:
+            if var == mem_var and (offset, size) in mem_values:
                 # we know the value, so don't need to read from memory
                 instr = (instr[0], '=') + mem_values[(offset, size)]
             else:
-                # we don't know the value, in this case some write could have written the value, looking into this
-                # further is not really necessary, we just suppose all writes are useful
-                mem_instrs.clear()
+                # we don't know the value, writes which could have written to this are useful
+                for write_var, write_offset, write_size in list(mem_instrs):
+                    if write_var != var or (offset < write_offset + write_size and write_offset < offset + size):
+                        mem_instrs.pop((write_var, write_offset, write_size))
+                # store in values to re-use variable on next read
+                if var != mem_var:
+                    mem_var = var
+                    mem_values.clear()
+                mem_values[(offset, size)] = (instr[0],)
         instrs_new.append(instr)
     instrs = instrs_new
 
@@ -343,9 +365,9 @@ def simplify_block(block):
     instrs = sa_include_flag_deps(instrs)
     instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
-    instrs = sa_expr_simp(instrs)
     while True:
         prev_len = len(instrs)
+        instrs = sa_expr_simp(instrs)
         instrs = sa_common_subexpr(instrs)
         instrs = sa_copy_propagate(instrs)
         instrs = sa_const_fold(instrs)
