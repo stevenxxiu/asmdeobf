@@ -2,7 +2,7 @@ import re
 import textwrap
 import unittest
 
-from analysis.main import extract_funcs, Block
+from analysis.main import Block, FuncExtract
 
 
 class MockRadare:
@@ -107,7 +107,7 @@ class TestExtractFuncs(unittest.TestCase):
             0,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = extract_funcs(r, 100)
+        funcs = FuncExtract(r).extract_funcs(100)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -124,7 +124,7 @@ class TestExtractFuncs(unittest.TestCase):
             zf,?{,101,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = extract_funcs(r, 100, is_oep_func=False)
+        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -148,7 +148,7 @@ class TestExtractFuncs(unittest.TestCase):
             2,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = extract_funcs(r, 100, is_oep_func=False)
+        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -175,7 +175,7 @@ class TestExtractFuncs(unittest.TestCase):
             eax,1,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = extract_funcs(r, 100, is_oep_func=False)
+        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,eax,^=',
@@ -193,7 +193,7 @@ class TestExtractFuncs(unittest.TestCase):
             zf,?{,103,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = extract_funcs(r, 100, is_oep_func=False)
+        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,eax,^=',
@@ -212,7 +212,7 @@ class TestExtractFuncs(unittest.TestCase):
             zf,?{,200,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = extract_funcs(r, 100, is_oep_func=False)
+        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',
