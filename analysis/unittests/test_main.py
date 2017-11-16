@@ -76,10 +76,10 @@ class MockRadare:
         matches = re.match(r'aei|aeim|aeip', cmd)
         if matches:
             return
-        matches = re.match(r'aer (\w+)$', cmd)
+        matches = re.match(r'aer ([$a-z]+)$', cmd)
         if matches:
             return f'0x{self.regs[matches.group(1)]:08x}'
-        matches = re.match(r'aer (\w+)=(\d+)', cmd)
+        matches = re.match(r'aer ([$a-z]+)=(\d+)', cmd)
         if matches:
             self.regs[matches.group(1)] = int(matches.group(2))
             return
@@ -95,19 +95,22 @@ class MockRadare:
         matches = re.match(r'pdj 1 @ (\d+)', cmd)
         if matches:
             return [{'esil': self.instrs[int(matches.group(1)) - self.base_addr], 'size': 1}]
+        matches = re.match(r'aerj', cmd)
+        if matches:
+            return self.regs
         raise ValueError('cmd', cmd)
 
 
 class TestExtractFuncs(unittest.TestCase):
     def test_simple(self):
         r = MockRadare(textwrap.dedent('''
-            eax,0,=
+            0,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
-                '101,eip,=,eax,0,=',
+                '101,eip,=,0,eax,=',
                 '102,eip,=,esp,[4],eip,=,4,esp,+='
             ], []),
         })
@@ -115,20 +118,20 @@ class TestExtractFuncs(unittest.TestCase):
     def test_cond_jmp_existing(self):
         # test conditional jmp into middle of existing block to break up block
         r = MockRadare(textwrap.dedent('''
-            eax,0,=
-            eax,1,=
-            eax,2,=
+            0,eax,=
+            1,eax,=
+            2,eax,=
             zf,?{,101,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
-                '101,eip,=,eax,0,=',
+                '101,eip,=,0,eax,=',
             ], [101]),
             101: Block([
-                '102,eip,=,eax,1,=',
-                '103,eip,=,eax,2,=',
+                '102,eip,=,1,eax,=',
+                '103,eip,=,2,eax,=',
                 '104,eip,=,zf,?{,101,eip,=,}'
             ], [101, 104], ('zf', False)),
             104: Block([
@@ -139,28 +142,33 @@ class TestExtractFuncs(unittest.TestCase):
     def test_cond_jmp_new(self):
         # test conditional jmp into new block to break up block
         r = MockRadare(textwrap.dedent('''
-            eax,0,=
+            0,eax,=
             zf,?{,103,eip,=,}
-            eax,1,=
-            eax,2,=
+            1,eax,=
+            2,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = extract_funcs(r, 100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
-                '101,eip,=,eax,0,=',
+                '101,eip,=,0,eax,=',
                 '102,eip,=,zf,?{,103,eip,=,}'
             ], [103, 102], ('zf', False)),
             102: Block([
-                '103,eip,=,eax,1,=',
+                '103,eip,=,1,eax,=',
             ], [103]),
             103: Block([
-                '104,eip,=,eax,2,=',
+                '104,eip,=,2,eax,=',
                 '105,eip,=,esp,[4],eip,=,4,esp,+='
             ], []),
         })
 
-    def test_no_cond_jmp_const(self):
+    def test_cond_ret(self):
+        # requires restoration of esp and identifying we landed on an existing addresses
+        pass
+
+    def test_fixed_jmp_const(self):
+        # conditional jmp depends on constant flag
         r = MockRadare(textwrap.dedent('''
             eax,eax,^=
             zf,?{,103,eip,=,}
@@ -177,7 +185,8 @@ class TestExtractFuncs(unittest.TestCase):
             ], []),
         })
 
-    def test_no_cond_jmp_no_longer_const(self):
+    def test_fixed_jmp_no_longer_const(self):
+        # conditional jmp flag is no longer constant
         r = MockRadare(textwrap.dedent('''
             eax,eax,^=
             $z,zf,=
@@ -196,7 +205,8 @@ class TestExtractFuncs(unittest.TestCase):
             ], []),
         })
 
-    def test_no_cond_jmp_precond(self):
+    def test_fixed_jmp_precond(self):
+        # some flags are constant depending on conditional jmp location
         r = MockRadare(textwrap.dedent('''
             zf,?{,102,eip,=,}
             zf,?{,200,eip,=,}
