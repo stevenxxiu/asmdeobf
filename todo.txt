@@ -3,3 +3,4 @@
 - Allow manually specifying functions to be inlined and analysis stop address
 - To better locate where blocks are and what we have missing do coverage in js (draw as canvas)
 - Present cfg in javascript, the result would look something like ida's analysis and generate a graph, with a list of functions on left panel and accesses on top
+- The user should deal with self-modifying code, in order to do this, add an instruction change hook, that whenever this instruction is encountered, it will be changed to user-specified esil
