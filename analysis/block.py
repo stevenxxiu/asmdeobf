@@ -1,6 +1,18 @@
 from collections import defaultdict
 
-__all__ = ['simplify_block', 'sa_pprint']
+__all__ = ['Block', 'simplify_block', 'sa_pprint']
+
+
+class Block:
+    def __init__(self, instrs=None, children=None, condition=None):
+        self.instrs = instrs or []
+        self.children = children or []
+        self.condition = condition
+
+    def __eq__(self, other):
+        if isinstance(self, other.__class__):
+            return self.__dict__ == other.__dict__
+        return False
 
 
 def is_var(name):

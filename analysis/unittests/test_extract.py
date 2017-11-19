@@ -2,7 +2,8 @@ import re
 import textwrap
 import unittest
 
-from analysis.main import Block, FuncExtract
+from analysis.block import Block
+from analysis.extract import FuncExtract
 
 
 class MockRadare:
@@ -88,6 +89,9 @@ class MockRadare:
             instr = self.instrs[self.regs['eip'] - self.base_addr]
             self.regs['eip'] += 1  # update eip first as esil assumes its updated
             self.run_instr(instr)
+            return
+        matches = re.match(r'e ', cmd)
+        if matches:
             return
         raise ValueError('cmd', cmd)
 

@@ -1,28 +1,8 @@
 import re
 
-import r2pipe
-
-from analysis.block import sa_pprint, simplify_block
-from analysis.func import simplify_func
+from analysis.block import Block
+from analysis.func import Function
 from analysis.winapi import WinAPI
-
-
-class Function:
-    def __init__(self, addr, blocks):
-        self.addr = addr
-        self.blocks = blocks
-
-
-class Block:
-    def __init__(self, instrs=None, children=None, condition=None):
-        self.instrs = instrs or []
-        self.children = children or []
-        self.condition = condition
-
-    def __eq__(self, other):
-        if isinstance(self, other.__class__):
-            return self.__dict__ == other.__dict__
-        return False
 
 
 class FuncExtract:
@@ -144,48 +124,3 @@ class FuncExtract:
         funcs = {}
         self.extract_func(addr, funcs, is_oep_func)
         return sorted(funcs.values())
-
-
-def main():
-    r = r2pipe.open('../../ReverseMe#8 by lena151.exe')
-
-    try:
-        # setup esil
-        r.cmd('e asm.esil=true')
-
-        # setup emu
-        r.cmd('e asm.emuwrite=true')
-        r.cmd('e io.cache=true')
-
-        # extract funcs
-        funcs = FuncExtract(r).extract_funcs(int(r.cmd('aer eip'), 16))
-
-        # simplify func
-        for func in funcs:
-            simplify_func(func)
-
-        # de-obfuscate blocks
-        for func in funcs:
-            for block in func.blocks.values():
-                simplify_block(block)
-
-        # pretty-print
-        for func in funcs:
-            print(f'sub_{func.addr:08x}')
-            for block_addr, block in sorted(func.blocks.items()):
-                print(f'block_{block_addr:08x}')
-                print(sa_pprint(block.instrs))
-                if block.condition:
-                    flag, is_negated = block.condition
-                    true_addr, false_addr = block.children[::-1] if is_negated else block.children
-                    print(f'{flag} ? {true_addr:08x} : {false_addr:08x}')
-                elif block.children:
-                    print(f'{block.children[0]:08x}')
-                print()
-
-    finally:
-        r.quit()
-
-
-if __name__ == '__main__':
-    main()

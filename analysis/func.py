@@ -1,5 +1,11 @@
 
-__all__ = ['simplify_func']
+__all__ = ['Function', 'simplify_func']
+
+
+class Function:
+    def __init__(self, addr, blocks):
+        self.addr = addr
+        self.blocks = blocks
 
 
 def func_remove_empty(func):
