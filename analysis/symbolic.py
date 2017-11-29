@@ -1,6 +1,14 @@
 from collections import namedtuple
 
-AddOp = namedtuple('AddOp', ('var_0', 'var_1'))
+AddOp = namedtuple('AddOp', ('expr_0', 'expr_1'))
+
+
+def simplify_add(expr):
+    if isinstance(expr.expr_0, int) and isinstance(expr.expr_1, int):
+        expr = expr.expr_0 + expr.expr_1
+    elif isinstance(expr.expr_0, AddOp) and isinstance(expr.expr_1, int):
+        expr = AddOp(expr.expr_0.expr_0, expr.expr_0.expr_1 + expr.expr_1)
+    return expr
 
 
 class SymbolicEmu:
@@ -43,6 +51,9 @@ class SymbolicEmu:
             self.regs[reg] = None
             reg = self.affect_regs[reg]
 
+    def _conv_val(self, val):
+        return val if isinstance(val, int) else self.regs[val]
+
     def emu(self, instrs):
         instr_stack = []
         condition = True
@@ -61,18 +72,27 @@ class SymbolicEmu:
                 instr_stack.append(self.regs[instr])
             elif instr == '=':
                 reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] = self.regs[val]
+                self.regs[reg] = self._conv_val(val)
                 self.propagate_affected(reg)
             elif instr == '+=':
-                # XXX process flags
                 reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] += self.regs[val]
+                self.regs[reg] = simplify_add(AddOp(self.regs[reg], self._conv_val(val)))
+                self.regs['cf'] = None
+                self.regs['pf'] = None
+                self.regs['af'] = None
+                self.regs['zf'] = None
+                self.regs['sf'] = None
+                self.regs['of'] = None
                 self.propagate_affected(reg)
             elif instr == '^=':
-                # XXX process flags
                 reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] ^= self.regs[val]
-                self.regs['zf'] = self.regs[reg] = 0
+                val = self._conv_val(val)
+                self.regs[reg] = 0 if self.regs[reg] == val else None
+                self.regs['cf'] = 0
+                self.regs['pf'] = None
+                self.regs['zf'] = 0 if self.regs[reg] == 0 else None
+                self.regs['sf'] = None
+                self.regs['of'] = 0
                 self.propagate_affected(reg)
             elif instr == '=[4]':
                 addr, val = instr_stack.pop(), instr_stack.pop()
