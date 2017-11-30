@@ -293,7 +293,7 @@ def sa_mem_elim(instrs):
             var = instr[2]
             var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][2:-1])
-            if var == mem_var and mem_values.read(offset, size) is not None:
+            if var == mem_var and mem_values.has(offset, size):
                 # we know the value, so don't need to read from memory
                 instr = (instr[0], '=') + mem_values.read(offset, size)
             else:

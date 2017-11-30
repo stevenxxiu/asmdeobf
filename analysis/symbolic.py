@@ -1,16 +1,8 @@
-from collections import namedtuple
+from collections import defaultdict
+
+from sympy import symbols
 
 __all__ = ['merge_state', 'is_sub_state', 'MemValues', 'SymbolicEmu']
-
-AddOp = namedtuple('AddOp', ('expr_1', 'expr_2'))
-
-
-def simplify_add(expr):
-    if isinstance(expr.expr_1, int) and isinstance(expr.expr_2, int):
-        expr = expr.expr_1 + expr.expr_2
-    elif isinstance(expr.expr_1, AddOp) and isinstance(expr.expr_2, int):
-        expr = AddOp(expr.expr_1.expr_1, expr.expr_1.expr_2 + expr.expr_2)
-    return expr
 
 
 def merge_state(state_1, state_2):
@@ -21,8 +13,19 @@ def is_sub_state(state_1, state_2):
     pass
 
 
-class MemValues:
+class SymbolNames:
     def __init__(self):
+        self.counts = defaultdict(int)
+
+    def __getitem__(self, item):
+        res = symbols(f'{item}_{self.counts[item]}')
+        self.counts[item] += 1
+        return res
+
+
+class MemValues:
+    def __init__(self, names=None):
+        self.names = names or {'mem': None}
         self.values = {}  # {(offset, size): value}
 
     def write(self, offset, size, value, can_overlap=True):
@@ -32,8 +35,11 @@ class MemValues:
                     self.values.pop((cache_offset, cache_size))
         self.values[(offset, size)] = value
 
+    def has(self, offset, size):
+        return (offset, size) in self.values
+
     def read(self, offset, size):
-        return self.values.get((offset, size), None)
+        return self.values.get((offset, size), self.names['mem'])
 
     def invalidate(self):
         self.values.clear()
@@ -50,35 +56,44 @@ class SymbolicEmu:
     # XXX make this generic enough to be usable in test_extract.py
 
     def __init__(self):
-        # the affected regs form a tree so we can just store the parent
-        self.affect_regs = {
-            'al': 'ax', 'ah': 'ax', 'ax': 'eax',
-            'cl': 'cx', 'ch': 'cx', 'cx': 'ecx',
-            'dl': 'dx', 'dh': 'dx', 'dx': 'edx',
-            'bl': 'bx', 'bh': 'bx', 'bx': 'ebx',
-            'sp': 'esp',
-            'bp': 'ebp',
-            'si': 'esi',
-            'di': 'edi',
+        self.affected = {
+            'al': {'ax'}, 'ah': {'ax'}, 'ax': {'eax'},
+            'cl': {'cx'}, 'ch': {'cx'}, 'cx': {'ecx'},
+            'dl': {'dx'}, 'dh': {'dx'}, 'dx': {'edx'},
+            'bl': {'bx'}, 'bh': {'bx'}, 'bx': {'ebx'},
+            'sp': {'esp'},
+            'bp': {'ebp'},
+            'si': {'esi'},
+            'di': {'edi'},
         }
-        self.regs = {
-            'al': None, 'ah': None, 'ax': None, 'eax': 'eax_0',
-            'cl': None, 'ch': None, 'cx': None, 'ecx': 'ecx_0',
-            'dl': None, 'dh': None, 'dx': None, 'edx': 'edx_0',
-            'bl': None, 'bh': None, 'bx': None, 'ebx': 'ebx_0',
-            'sp': None, 'esp': 'esp_0',
-            'bp': None, 'ebp': 'ebp_0',
-            'si': None, 'esi': 'esi_0',
-            'di': None, 'edi': 'edi_0',
-            'eip': None,
-            'cf': False, 'pf': True, 'af': False, 'zf': True, 'sf': False, 'tf': False, 'df': False, 'of': False,
-        }
-        self.stack = MemValues()
+        for reg, parents in self.affected.items():
+            parent = next(iter(parents))
+            while parent in self.affected:
+                parent = next(iter(self.affected[parent]))
+                parents.add(parent)
+        for reg, parents in dict(self.affected).items():
+            for parent in parents:
+                if parent not in self.affected:
+                    self.affected[parent] = set()
+                self.affected[parent].add(reg)
+        self.names = SymbolNames()
+        self.regs = {reg: self.names[reg] for reg in (
+            'al', 'ah', 'ax', 'eax',
+            'cl', 'ch', 'cx', 'ecx',
+            'dl', 'dh', 'dx', 'edx',
+            'bl', 'bh', 'bx', 'ebx',
+            'sp', 'esp',
+            'bp', 'ebp',
+            'si', 'esi',
+            'di', 'edi',
+            'eip',
+            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+        )}
+        self.stack = MemValues(self.names)
 
     def propagate_affected(self, reg):
-        while reg in self.affect_regs:
-            self.regs[reg] = None
-            reg = self.affect_regs[reg]
+        for reg in self.affected.get(reg, []):
+            self.regs[reg] = self.names[reg]
 
     def _conv_val(self, val):
         return val if isinstance(val, int) else self.regs[val]
@@ -89,7 +104,7 @@ class SymbolicEmu:
         for instr in instrs.split(','):
             if condition is False:
                 continue
-            elif condition is None:
+            elif condition is not True:
                 raise ValueError('unknown condition')
             if str.isdecimal(instr):
                 instr_stack.append(int(instr))
@@ -105,31 +120,33 @@ class SymbolicEmu:
                 self.propagate_affected(reg)
             elif instr == '+=':
                 reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] = simplify_add(AddOp(self.regs[reg], self._conv_val(val)))
-                self.regs['cf'] = None
-                self.regs['pf'] = None
-                self.regs['af'] = None
-                self.regs['zf'] = None
-                self.regs['sf'] = None
-                self.regs['of'] = None
+                self.regs[reg] = self.regs[reg] + self._conv_val(val)
+                self.regs['cf'] = self.names['cf']
+                self.regs['pf'] = self.names['pf']
+                self.regs['af'] = self.names['af']
+                self.regs['zf'] = self.names['zf']
+                self.regs['sf'] = self.names['sf']
+                self.regs['of'] = self.names['of']
                 self.propagate_affected(reg)
             elif instr == '^=':
                 reg, val = instr_stack.pop(), instr_stack.pop()
                 val = self._conv_val(val)
-                self.regs[reg] = 0 if self.regs[reg] == val else None
+                self.regs[reg] = 0 if self.regs[reg] == val else self.names[reg]
                 self.regs['cf'] = 0
-                self.regs['pf'] = None
-                self.regs['zf'] = 0 if self.regs[reg] == 0 else None
-                self.regs['sf'] = None
+                self.regs['pf'] = self.names['pf']
+                self.regs['zf'] = 0 if self.regs[reg] == 0 else self.names['zf']
+                self.regs['sf'] = self.names['sf']
                 self.regs['of'] = 0
                 self.propagate_affected(reg)
             elif instr == '=[4]':
                 addr, val = instr_stack.pop(), instr_stack.pop()
+                val = self._conv_val(val)
+
                 self.mem[addr] = self.regs[val]
             elif instr == '[4]':
                 instr_stack.append(self.mem[instr_stack.pop()])
             elif instr == '?{':
-                condition = instr_stack.pop()
+                condition = self._conv_val(instr_stack.pop())
             elif instr == '}':
                 condition = True
             else:
@@ -137,3 +154,6 @@ class SymbolicEmu:
 
     def emu_api_call(self, stack_size):
         pass
+
+
+symb_emu = SymbolicEmu()
