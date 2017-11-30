@@ -1,6 +1,3 @@
-# Analysis
-For simplicity of analysis, we suppose the program does not modify itself. This is clearly untrue by looking at the first block, but as long as the self-modifications are fixed, analyzing the program as if it were not appears to work regardless, due to radare emulator doing memory writes to the code as we go.
-
 # Extracting a CFG
 To extract a CFG, we first need to identify conditional branches. Conditional branches that are taken for certain (jz when zf == 0) have to be ignored, as the other dest can be invalid code. However, there needs to be some care taken regarding initial conditions when loops are involved, for-example the following code's `label_2` may be ignored if initial conditions are not updated, through discovery of new blocks:
 
@@ -17,6 +14,11 @@ Calls also split a block in two to facilitate block-by-block deobfuscation.
 
 # De-obfuscation of the CFG
 De-obfuscation is done on the CFG, as well as block-by-block.
+
+# Self-modifying code
+The analysis supposes the program self-modifications do not modify already-executed code that will executed again, and handles this through the use of the radare emulator.
+
+If this is not the case for some parts of the program, we will provide an api to let the user hook addresses so fixed code can become some user-specified code to be handed to the analyzer.
 
 # Other tools
 Radeco only works on linux and is not aimed particularly at de-obfuscation. For convenience of python we code own ssa form/simplification routines.
