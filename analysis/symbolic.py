@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from sympy import symbols
+from sympy import symbols, preorder_traversal
 
 __all__ = ['merge_state', 'is_sub_state', 'MemValues', 'SymbolicEmu']
 
@@ -138,13 +138,29 @@ class SymbolicEmu:
                 self.regs['sf'] = self.names['sf']
                 self.regs['of'] = 0
                 self.propagate_affected(reg)
-            elif instr == '=[4]':
+            elif instr.startswith('=['):
                 addr, val = instr_stack.pop(), instr_stack.pop()
+                size = int(instr[2:-1])
                 val = self._conv_val(val)
-
-                self.mem[addr] = self.regs[val]
-            elif instr == '[4]':
-                instr_stack.append(self.mem[instr_stack.pop()])
+                if any(arg.name == 'esp_0' for arg in preorder_traversal(addr)):
+                    if addr.is_Symbol:
+                        self.stack.write(0, size, val)
+                    elif addr.is_Add and isinstance(addr.args[1], int):
+                        self.stack.write(addr.args[1], size, val)
+                    else:
+                        self.stack.invalidate()
+            elif instr.startswith('['):
+                addr = instr_stack.pop()
+                size = int(instr[1:-1])
+                val = None
+                if any(arg.name == 'esp_0' for arg in preorder_traversal(addr)):
+                    if addr.is_Symbol:
+                        val = self.stack.read(0, size)
+                    elif addr.is_Add and isinstance(addr.args[1], int):
+                        val = self.stack.read(addr.args[1], size)
+                if val is None:
+                    val = self.names['mem']
+                instr_stack.append(val)
             elif instr == '?{':
                 condition = self._conv_val(instr_stack.pop())
             elif instr == '}':
