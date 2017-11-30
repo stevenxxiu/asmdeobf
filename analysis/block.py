@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+from analysis.symbolic import MemValues
+
 __all__ = ['Block', 'simplify_block', 'sa_pprint']
 
 
@@ -262,13 +264,13 @@ def sa_const_fold(instrs):
 def sa_mem_elim(instrs):
     '''
     Track and eliminates useless memory reads and writes. We track the memory of a register with its offsets. We are
-    conservative and don't assume register bounds.
+    sound and don't assume register bounds.
     '''
     # track memory accesses and replace known memory values
     instrs_new = []
     var_map = {}  # maps `r2` to `(r1, 5)` if we have `r2 = r1 + 5`
     mem_var = None  # current var memory values are based upon
-    mem_values = defaultdict(dict)  # {(offset, size): value}
+    mem_values = MemValues()
     mem_instrs = defaultdict(dict)  # {(var_, offset, size): instr_i}, eliminates dead writes
     dead_instrs = set()
     for i, instr in enumerate(instrs):
@@ -278,27 +280,22 @@ def sa_mem_elim(instrs):
             var = instr[0]
             var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][1:-2])
-            if var == mem_var:
-                # invalidate value cache which overlaps
-                for cache_offset, cache_size in list(mem_values):
-                    if offset < cache_offset + cache_size and cache_offset < offset + size:
-                        mem_values.pop((cache_offset, cache_size))
-            else:
-                # invalidate value cache since var has changed
-                mem_var = var
-                mem_values.clear()
-            # check for dead writes and store new value
+            # check for dead writes
             if (var, offset, size) in mem_instrs:
                 dead_instrs.add(mem_instrs[(var, offset, size)])
             mem_instrs[(var, offset, size)] = i
-            mem_values[(offset, size)] = instr[2:]
+            # store value
+            if var != mem_var:
+                mem_var = var
+                mem_values.invalidate()
+            mem_values.write(offset, size, instr[2:])
         elif instr[1].startswith('=[') and len(instr) == 3:
             var = instr[2]
             var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][2:-1])
-            if var == mem_var and (offset, size) in mem_values:
+            if var == mem_var and mem_values.read(offset, size) is not None:
                 # we know the value, so don't need to read from memory
-                instr = (instr[0], '=') + mem_values[(offset, size)]
+                instr = (instr[0], '=') + mem_values.read(offset, size)
             else:
                 # we don't know the value, writes which could have written to this are useful
                 for write_var, write_offset, write_size in list(mem_instrs):
@@ -307,8 +304,8 @@ def sa_mem_elim(instrs):
                 # store in values to re-use variable on next read
                 if var != mem_var:
                     mem_var = var
-                    mem_values.clear()
-                mem_values[(offset, size)] = (instr[0],)
+                    mem_values.invalidate()
+                mem_values.write(offset, size, instr[:1], can_overlap=False)
         instrs_new.append(instr)
     instrs = instrs_new
 

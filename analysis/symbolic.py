@@ -1,14 +1,42 @@
 from collections import namedtuple
 
-AddOp = namedtuple('AddOp', ('expr_0', 'expr_1'))
+__all__ = ['merge_state', 'is_sub_state', 'MemValues', 'SymbolicEmu']
+
+AddOp = namedtuple('AddOp', ('expr_1', 'expr_2'))
 
 
 def simplify_add(expr):
-    if isinstance(expr.expr_0, int) and isinstance(expr.expr_1, int):
-        expr = expr.expr_0 + expr.expr_1
-    elif isinstance(expr.expr_0, AddOp) and isinstance(expr.expr_1, int):
-        expr = AddOp(expr.expr_0.expr_0, expr.expr_0.expr_1 + expr.expr_1)
+    if isinstance(expr.expr_1, int) and isinstance(expr.expr_2, int):
+        expr = expr.expr_1 + expr.expr_2
+    elif isinstance(expr.expr_1, AddOp) and isinstance(expr.expr_2, int):
+        expr = AddOp(expr.expr_1.expr_1, expr.expr_1.expr_2 + expr.expr_2)
     return expr
+
+
+def merge_state(state_1, state_2):
+    pass
+
+
+def is_sub_state(state_1, state_2):
+    pass
+
+
+class MemValues:
+    def __init__(self):
+        self.values = {}  # {(offset, size): value}
+
+    def write(self, offset, size, value, can_overlap=True):
+        if can_overlap:
+            for cache_offset, cache_size in list(self.values):
+                if offset < cache_offset + cache_size and cache_offset < offset + size:
+                    self.values.pop((cache_offset, cache_size))
+        self.values[(offset, size)] = value
+
+    def read(self, offset, size):
+        return self.values.get((offset, size), None)
+
+    def invalidate(self):
+        self.values.clear()
 
 
 class SymbolicEmu:
@@ -16,10 +44,10 @@ class SymbolicEmu:
     Symbolic emulator, used for CFG extraction to see if the next instruction has a known address. A faster but less
     complete version of block simplification.
 
-    To simulate the stack reasonably we assume that esp is separate from every other memory access.
+    We assume the stack is separate from every other memory access, which is still sound enough.
     '''
 
-    # XXX make this generic enough to be usable in test_extract.py and in sa_mem_elim
+    # XXX make this generic enough to be usable in test_extract.py
 
     def __init__(self):
         # the affected regs form a tree so we can just store the parent
@@ -45,6 +73,7 @@ class SymbolicEmu:
             'eip': None,
             'cf': False, 'pf': True, 'af': False, 'zf': True, 'sf': False, 'tf': False, 'df': False, 'of': False,
         }
+        self.stack = MemValues()
 
     def propagate_affected(self, reg):
         while reg in self.affect_regs:
@@ -105,8 +134,6 @@ class SymbolicEmu:
                 condition = True
             else:
                 raise ValueError('instr', instr)
-
-        pass
 
     def emu_api_call(self, stack_size):
         pass
