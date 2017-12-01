@@ -2,93 +2,44 @@ import re
 import textwrap
 import unittest
 
+from sympy import sympify
+
 from analysis.block import Block
 from analysis.extract import FuncExtract
+from analysis.symbolic import SymbolicEmu
 
 
 class MockRadare:
     def __init__(self, instrs, base_addr):
         self.instrs = instrs
         self.base_addr = base_addr
-        self.regs = {'eax': 1, '$z': 0, 'eip': 0, 'esp': 0}
-        self.mem = [0] * 64
-
-    def _conv_val(self, val):
-        return val if isinstance(val, int) else self.regs[val]
-
-    def run_instr(self, instrs):
-        instr_stack = []
-        condition = True
-        for instr in instrs.split(','):
-            if not condition:
-                continue
-            if str.isdecimal(instr):
-                instr_stack.append(int(instr))
-            elif instr.startswith('0x'):
-                instr_stack.append(int(instr, 16))
-            elif instr in (
-                'al', 'ah', 'ax', 'eax',
-                'cl', 'ch', 'cx', 'ecx',
-                'dl', 'dh', 'dx', 'edx',
-                'bl', 'bh', 'bx', 'ebx',
-                'sp', 'esp',
-                'bp', 'ebp',
-                'si', 'esi',
-                'di', 'edi',
-                'eip',
-                'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-            ):
-                instr_stack.append(instr)
-            elif instr.startswith('$'):
-                instr_stack.append(self.regs[instr])
-            elif instr == '=':
-                reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] = self._conv_val(val)
-            elif instr == '+=':
-                # ignores flags for simplicity
-                reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] += self._conv_val(val)
-            elif instr == '^=':
-                # ignores flags for simplicity except zf
-                reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] ^= self._conv_val(val)
-                self.regs['zf'] = self.regs[reg] = 0
-            elif instr == '=[4]':
-                addr, val = instr_stack.pop(), instr_stack.pop()
-                self.mem[self._conv_val(addr)] = val
-            elif instr == '[4]':
-                instr_stack.append(self.mem[self._conv_val(instr_stack.pop())])
-            elif instr == '?{':
-                condition = self._conv_val(instr_stack.pop())
-            elif instr == '}':
-                condition = True
-            else:
-                raise ValueError('instr', instr)
+        self.emu = SymbolicEmu()
+        for reg in self.emu.regs:
+            if reg not in ('sp', 'esp'):
+                self.emu.regs[reg] = sympify(0)
+        for i in range(0, 100, 4):
+            self.emu.stack.values[(i, 4)] = sympify(0)
 
     def cmd(self, cmd):
         matches = re.match(r's (\d+)', cmd)
         if matches:
-            self.regs['eip'] = int(matches.group(1))
-            return
-        matches = re.match(r'ae (.+)', cmd)
-        if matches:
-            self.run_instr(matches.group(1))
+            self.emu.regs['eip'] = sympify(matches.group(1))
             return
         matches = re.match(r'aei|aeim|aeip', cmd)
         if matches:
             return
-        matches = re.match(r'aer ([$a-z]+)$', cmd)
+        matches = re.match(r'aer ([a-z]+)$', cmd)
         if matches:
-            return f'0x{self.regs[matches.group(1)]:08x}'
-        matches = re.match(r'aer ([$a-z]+)=(\d+)', cmd)
+            return f'0x{int(self.emu.regs[matches.group(1)]):08x}'
+        matches = re.match(r'aer ([a-z]+)=(\d+)', cmd)
         if matches:
-            self.regs[matches.group(1)] = int(matches.group(2))
+            self.emu.regs[matches.group(1)] = sympify(matches.group(2))
             return
         matches = re.match(r'aes', cmd)
         if matches:
-            instr = self.instrs[self.regs['eip'] - self.base_addr]
-            self.regs['eip'] += 1  # update eip first as esil assumes its updated
-            self.run_instr(instr)
+            instr = self.instrs[int(self.emu.regs['eip']) - self.base_addr]
+            self.emu.regs['eip'] += 1  # update eip first as esil assumes its updated
+            self.emu.step(instr)
             return
         matches = re.match(r'e ', cmd)
         if matches:
@@ -101,7 +52,10 @@ class MockRadare:
             return [{'esil': self.instrs[int(matches.group(1)) - self.base_addr], 'size': 1}]
         matches = re.match(r'aerj', cmd)
         if matches:
-            return self.regs
+            return {
+                name: val for name, val in self.emu.regs.items()
+                if not name.startswith('$') and name not in ('sp', 'esp')
+            }
         raise ValueError('cmd', cmd)
 
 

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import deepcopy
 
 from sympy import Symbol, sympify
 
@@ -57,59 +58,68 @@ class SymbolicEmu:
     We assume the stack is separate from every other memory access, which is still sound enough.
     '''
 
-    # XXX make this generic enough to be usable in test_extract.py
-
     def __init__(self):
+        self.bits = {
+            'al': 8, 'ah': 8, 'ax': 16, 'eax': 32,
+            'cl': 8, 'ch': 8, 'cx': 16, 'ecx': 32,
+            'dl': 8, 'dh': 8, 'dx': 16, 'edx': 32,
+            'bl': 8, 'bh': 8, 'bx': 16, 'ebx': 32,
+            'sp': 16, 'esp': 32,
+            'bp': 16, 'ebp': 32,
+            'si': 16, 'esi': 32,
+            'di': 16, 'edi': 32,
+            'eip': 32,
+            'cf': 1, 'pf': 1, 'af': 1, 'zf': 1, 'sf': 1, 'tf': 1, 'df': 1, 'of': 1,
+        }
         self.affected = {
-            'al': {'ax'}, 'ah': {'ax'}, 'ax': {'eax'},
-            'cl': {'cx'}, 'ch': {'cx'}, 'cx': {'ecx'},
-            'dl': {'dx'}, 'dh': {'dx'}, 'dx': {'edx'},
-            'bl': {'bx'}, 'bh': {'bx'}, 'bx': {'ebx'},
-            'sp': {'esp'},
-            'bp': {'ebp'},
-            'si': {'esi'},
-            'di': {'edi'},
+            'al': {'ax': (0, 7)}, 'ah': {'ax': (8, 15)}, 'ax': {'eax': (0, 15)},
+            'cl': {'cx': (0, 7)}, 'ch': {'cx': (8, 15)}, 'cx': {'ecx': (0, 15)},
+            'dl': {'dx': (0, 7)}, 'dh': {'dx': (8, 15)}, 'dx': {'edx': (0, 15)},
+            'bl': {'bx': (0, 7)}, 'bh': {'bx': (8, 15)}, 'bx': {'ebx': (0, 15)},
+            'sp': {'esp': (0, 15)},
+            'bp': {'ebp': (0, 15)},
+            'si': {'esi': (0, 15)},
+            'di': {'edi': (0, 15)},
         }
         for reg, parents in self.affected.items():
-            parent = next(iter(parents))
-            while parent in self.affected:
-                parent = next(iter(self.affected[parent]))
-                parents.add(parent)
-        for reg, parents in dict(self.affected).items():
+            ancestor, bits = next(iter(parents.items()))
+            cur_start = bits[0]
+            while ancestor in self.affected:
+                ancestor, bits = next(iter(self.affected[ancestor].items()))
+                cur_start += bits[0]
+                parents[ancestor] = (cur_start, cur_start + self.bits[reg] - 1)
+        for reg, parents in deepcopy(self.affected).items():
             for parent in parents:
                 if parent not in self.affected:
-                    self.affected[parent] = set()
-                self.affected[parent].add(reg)
+                    self.affected[parent] = {}
+                self.affected[parent][reg] = (0, self.bits[reg] - 1)
         self.names = SymbolNames()
-        self.regs = {reg: self.names[reg] for reg in (
-            'al', 'ah', 'ax', 'eax',
-            'cl', 'ch', 'cx', 'ecx',
-            'dl', 'dh', 'dx', 'edx',
-            'bl', 'bh', 'bx', 'ebx',
-            'sp', 'esp',
-            'bp', 'ebp',
-            'si', 'esi',
-            'di', 'edi',
-            'eip',
-            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-            '$c7', '$c15', '$c31', '$p', '$z', '$s', '$o',
-        )}
+        self.regs = {reg: self.names[reg] for reg in self.bits}
+        self.regs.update({name: sympify(val) for name, val in {
+            '$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0,
+        }.items()})
         self.stack = MemValues(self.names)
 
     def propagate_affected(self, reg):
-        for reg in self.affected.get(reg, []):
-            self.regs[reg] = self.names[reg]
+        for parent, bits in self.affected.get(reg, {}).items():
+            if self.regs[parent].is_Integer and self.regs[reg].is_Integer:
+                parent_val = int(self.regs[parent])
+                reg_val = int(self.regs[reg])
+                mask = ((1 << (bits[1] - bits[0] + 1)) - 1) << bits[0]
+                self.regs[parent] = sympify((parent_val & ~mask) | (reg_val << bits[0]))
+            else:
+                self.regs[parent] = self.names[parent]
 
-    def _conv_val(self, val):
+    def _conv_instr_val(self, val):
         return self.regs[val] if val in self.regs else sympify(val)
 
     def step(self, instrs):
         instr_stack = []
-        condition = True
+        condition = 1
         for instr in instrs.split(','):
-            if condition is False:
+            if condition == 0:
                 continue
-            elif condition is not True:
+            elif condition != 1:
                 raise ValueError('unknown condition')
             if str.isdecimal(instr):
                 instr_stack.append(int(instr))
@@ -122,11 +132,11 @@ class SymbolicEmu:
             elif instr == '$1':
                 instr_stack.append(1)
             elif instr == '=':
-                reg, val = instr_stack.pop(), self._conv_val(instr_stack.pop())
+                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = val
                 self.propagate_affected(reg)
             elif instr == '+=':
-                reg, val = instr_stack.pop(), self._conv_val(instr_stack.pop())
+                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = self.regs[reg] + val
                 self.regs['$c7'] = self.names['cf']
                 self.regs['$c15'] = self.names['cf']
@@ -137,21 +147,21 @@ class SymbolicEmu:
                 self.regs['$o'] = self.names['of']
                 self.propagate_affected(reg)
             elif instr == '^=':
-                reg, val = instr_stack.pop(), self._conv_val(instr_stack.pop())
-                self.regs[reg] = 0 if self.regs[reg] == val else self.names[reg]
+                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
+                self.regs[reg] = sympify(0) if self.regs[reg] == val else self.names[reg]
                 self.regs['$p'] = self.names['pf']
-                self.regs['$z'] = 0 if self.regs[reg] == 0 else self.names['zf']
+                self.regs['$z'] = sympify(0) if self.regs[reg] == 0 else self.names['zf']
                 self.regs['$s'] = self.names['sf']
                 self.propagate_affected(reg)
             elif instr.startswith('=['):
-                addr, val = self._conv_val(instr_stack.pop()), self._conv_val(instr_stack.pop())
+                addr, val = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
                 size = int(instr[2:-1])
                 if addr == Symbol('esp_0'):
                     self.stack.write(0, size, val)
                 elif addr.is_Add and addr.args[1] == Symbol('esp_0') and addr.args[0].is_Integer:
                     self.stack.write(int(addr.args[0]), size, val)
             elif instr.startswith('['):
-                addr = self._conv_val(instr_stack.pop())
+                addr = self._conv_instr_val(instr_stack.pop())
                 size = int(instr[1:-1])
                 if addr == Symbol('esp_0'):
                     val = self.stack.read(0, size)
@@ -161,14 +171,11 @@ class SymbolicEmu:
                     val = self.names['mem']
                 instr_stack.append(val)
             elif instr == '?{':
-                condition = self._conv_val(instr_stack.pop())
+                condition = self._conv_instr_val(instr_stack.pop())
             elif instr == '}':
-                condition = True
+                condition = 1
             else:
                 raise ValueError('instr', instr)
 
     def step_api_call(self, stack_size):
         pass
-
-
-symb_emu = SymbolicEmu()
