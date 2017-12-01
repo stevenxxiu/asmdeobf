@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from sympy import symbols, preorder_traversal
+from sympy import Symbol, sympify
 
 __all__ = ['ConstConstraint', 'MemValues', 'SymbolicEmu']
 
@@ -22,7 +22,7 @@ class SymbolNames:
         self.counts = defaultdict(int)
 
     def __getitem__(self, item):
-        res = symbols(f'{item}_{self.counts[item]}')
+        res = Symbol(f'{item}_{self.counts[item]}')
         self.counts[item] += 1
         return res
 
@@ -92,6 +92,7 @@ class SymbolicEmu:
             'di', 'edi',
             'eip',
             'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+            '$c7', '$c15', '$c31', '$p', '$z', '$s', '$o',
         )}
         self.stack = MemValues(self.names)
 
@@ -100,9 +101,9 @@ class SymbolicEmu:
             self.regs[reg] = self.names[reg]
 
     def _conv_val(self, val):
-        return val if isinstance(val, int) else self.regs[val]
+        return self.regs[val] if val in self.regs else sympify(val)
 
-    def emu(self, instrs):
+    def step(self, instrs):
         instr_stack = []
         condition = True
         for instr in instrs.split(','):
@@ -116,53 +117,47 @@ class SymbolicEmu:
                 instr_stack.append(int(instr, 16))
             elif instr in self.regs:
                 instr_stack.append(instr)
-            elif instr.startswith('$'):
-                instr_stack.append(self.regs[instr])
+            elif instr == '$0':
+                instr_stack.append(0)
+            elif instr == '$1':
+                instr_stack.append(1)
             elif instr == '=':
-                reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] = self._conv_val(val)
+                reg, val = instr_stack.pop(), self._conv_val(instr_stack.pop())
+                self.regs[reg] = val
                 self.propagate_affected(reg)
             elif instr == '+=':
-                reg, val = instr_stack.pop(), instr_stack.pop()
-                self.regs[reg] = self.regs[reg] + self._conv_val(val)
-                self.regs['cf'] = self.names['cf']
-                self.regs['pf'] = self.names['pf']
-                self.regs['af'] = self.names['af']
-                self.regs['zf'] = self.names['zf']
-                self.regs['sf'] = self.names['sf']
-                self.regs['of'] = self.names['of']
+                reg, val = instr_stack.pop(), self._conv_val(instr_stack.pop())
+                self.regs[reg] = self.regs[reg] + val
+                self.regs['$c7'] = self.names['cf']
+                self.regs['$c15'] = self.names['cf']
+                self.regs['$c31'] = self.names['cf']
+                self.regs['$p'] = self.names['pf']
+                self.regs['$z'] = self.names['zf']
+                self.regs['$s'] = self.names['sf']
+                self.regs['$o'] = self.names['of']
                 self.propagate_affected(reg)
             elif instr == '^=':
-                reg, val = instr_stack.pop(), instr_stack.pop()
-                val = self._conv_val(val)
+                reg, val = instr_stack.pop(), self._conv_val(instr_stack.pop())
                 self.regs[reg] = 0 if self.regs[reg] == val else self.names[reg]
-                self.regs['cf'] = 0
-                self.regs['pf'] = self.names['pf']
-                self.regs['zf'] = 0 if self.regs[reg] == 0 else self.names['zf']
-                self.regs['sf'] = self.names['sf']
-                self.regs['of'] = 0
+                self.regs['$p'] = self.names['pf']
+                self.regs['$z'] = 0 if self.regs[reg] == 0 else self.names['zf']
+                self.regs['$s'] = self.names['sf']
                 self.propagate_affected(reg)
             elif instr.startswith('=['):
-                addr, val = instr_stack.pop(), instr_stack.pop()
+                addr, val = self._conv_val(instr_stack.pop()), self._conv_val(instr_stack.pop())
                 size = int(instr[2:-1])
-                val = self._conv_val(val)
-                if any(arg.name == 'esp_0' for arg in preorder_traversal(addr)):
-                    if addr.is_Symbol:
-                        self.stack.write(0, size, val)
-                    elif addr.is_Add and isinstance(addr.args[1], int):
-                        self.stack.write(addr.args[1], size, val)
-                    else:
-                        self.stack.invalidate()
+                if addr == Symbol('esp_0'):
+                    self.stack.write(0, size, val)
+                elif addr.is_Add and addr.args[1] == Symbol('esp_0') and addr.args[0].is_Integer:
+                    self.stack.write(int(addr.args[0]), size, val)
             elif instr.startswith('['):
-                addr = instr_stack.pop()
+                addr = self._conv_val(instr_stack.pop())
                 size = int(instr[1:-1])
-                val = None
-                if any(arg.name == 'esp_0' for arg in preorder_traversal(addr)):
-                    if addr.is_Symbol:
-                        val = self.stack.read(0, size)
-                    elif addr.is_Add and isinstance(addr.args[1], int):
-                        val = self.stack.read(addr.args[1], size)
-                if val is None:
+                if addr == Symbol('esp_0'):
+                    val = self.stack.read(0, size)
+                elif addr.is_Add and addr.args[1] == Symbol('esp_0') and addr.args[0].is_Integer:
+                    val = self.stack.read(int(addr.args[0]), size)
+                else:
                     val = self.names['mem']
                 instr_stack.append(val)
             elif instr == '?{':
@@ -172,7 +167,7 @@ class SymbolicEmu:
             else:
                 raise ValueError('instr', instr)
 
-    def emu_api_call(self, stack_size):
+    def step_api_call(self, stack_size):
         pass
 
 
