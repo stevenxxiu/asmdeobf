@@ -2,15 +2,19 @@ from collections import defaultdict
 
 from sympy import symbols, preorder_traversal
 
-__all__ = ['merge_state', 'is_sub_state', 'MemValues', 'SymbolicEmu']
+__all__ = ['ConstConstraint', 'MemValues', 'SymbolicEmu']
 
 
-def merge_state(state_1, state_2):
-    pass
+class ConstConstraint:
+    def __init__(self, state):
+        # XXX get constraints
+        pass
 
+    def widen(self, other):
+        pass
 
-def is_sub_state(state_1, state_2):
-    pass
+    def to_state(self):
+        pass
 
 
 class SymbolNames:
