@@ -96,18 +96,18 @@ class FuncExtract:
                 matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],(\d+),eip,=', instr)
                 if matches:
                     ret_addr, call_addr = matches.group(1), matches.group(2)
-                    matches = re.match(
-                        r'jmp dword \[sym\.imp\.(.+)_(.+)\]',
-                        self.r.cmdj(f'pdj 1 @ {call_addr}')[0]['opcode']
-                    )
-                    if matches:
-                        # end current block to aid in de-obfuscation
-                        lib_name, api_name = matches.group(1), matches.group(2)
-                        self.r.cmd(f'ae {self.winapi.get_stack_change(lib_name, api_name)},esp,+=')
-                        emu_state = self.r.cmdj('aerj')
-                        stack.append((int(ret_addr), emu_state, {}))
-                        block.children = [int(ret_addr)]
-                        break
+                    matches = re.match(r'(0x\d+),\[\],eip,=', self.r.cmdj(f'pdj 1 @ {call_addr}')[0]['esil'])
+                if matches:
+                    api_addr = matches.group(1)
+                    matches = re.match(r'sym\.imp\.(\S+)_(\S+)$', self.r.cmd(f'fd {api_addr}'))
+                if matches:
+                    # end current block to aid in de-obfuscation
+                    lib_name, api_name = matches.group(1), matches.group(2)
+                    self.r.cmd(f'ae {self.winapi.get_stack_change(lib_name, api_name)},esp,+=')
+                    emu_state = self.r.cmdj('aerj')
+                    stack.append((int(ret_addr), emu_state, {}))
+                    block.children = [int(ret_addr)]
+                    break
 
                 # check if instruction is a call to a proc
                 # check if function was already analyzed
