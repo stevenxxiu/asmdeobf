@@ -27,9 +27,6 @@ class MockRadare:
         matches = re.match(r'aei|aeim|aeip', cmd)
         if matches:
             return
-        matches = re.match(r'aer ([a-z]+)$', cmd)
-        if matches:
-            return f'0x{int(self.emu.regs[matches.group(1)]):08x}'
         matches = re.match(r'aer ([a-z]+)=(\d+)', cmd)
         if matches:
             self.emu.regs[matches.group(1)] = sympify(matches.group(2))
@@ -126,7 +123,7 @@ class TestExtractFuncs(unittest.TestCase):
         r = MockRadare(textwrap.dedent('''
             eax,eax,^=
             zf,?{,103,eip,=,}
-            eax,1,=
+            1,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
@@ -134,7 +131,7 @@ class TestExtractFuncs(unittest.TestCase):
             100: Block([
                 '101,eip,=,eax,eax,^=',
                 '102,eip,=,zf,?{,103,eip,=,}',
-                '103,eip,=,eax,1,=',
+                '103,eip,=,1,eax,=',
                 '104,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
         })

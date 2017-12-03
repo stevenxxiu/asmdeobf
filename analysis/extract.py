@@ -40,7 +40,7 @@ class FuncExtract:
             self.r.cmd('aeip')
 
             while True:
-                cur_addr = int(self.r.cmd('aer eip'), 16)
+                cur_addr = self.r.cmdj('aerj')['eip']
                 if cur_addr == 0:
                     break
 

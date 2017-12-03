@@ -14,7 +14,7 @@ def main():
         r.cmd('e io.cache=true')
 
         # extract funcs
-        funcs = FuncExtract(r).extract_funcs(int(r.cmd('aer eip'), 16))
+        funcs = FuncExtract(r).extract_funcs(r.cmdj('aerj')['eip'])
 
         # simplify func
         for func in funcs:
