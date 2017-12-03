@@ -15,10 +15,9 @@ class MockRadare:
         self.base_addr = base_addr
         self.emu = SymbolicEmu()
         for reg in self.emu.regs:
-            if reg not in ('sp', 'esp'):
-                self.emu.regs[reg] = sympify(0)
+            self.emu.regs[reg] = sympify(0)
         for i in range(0, 100, 4):
-            self.emu.stack.values[(i, 4)] = sympify(0)
+            self.emu.mem.values[(i, 4)] = sympify(0)
 
     def cmd(self, cmd):
         matches = re.match(r's (\d+)', cmd)
@@ -52,10 +51,7 @@ class MockRadare:
             return [{'esil': self.instrs[int(matches.group(1)) - self.base_addr], 'size': 1}]
         matches = re.match(r'aerj', cmd)
         if matches:
-            return {
-                name: val for name, val in self.emu.regs.items()
-                if not name.startswith('$') and name not in ('sp', 'esp')
-            }
+            return {name: val for name, val in self.emu.regs.items() if not name.startswith('$')}
         raise ValueError('cmd', cmd)
 
 

@@ -269,7 +269,7 @@ def sa_mem_elim(instrs):
     # track memory accesses and replace known memory values
     instrs_new = []
     var_map = {}  # maps `r2` to `(r1, 5)` if we have `r2 = r1 + 5`
-    mem_var = None  # current var memory values are based upon
+    mem_var = 0  # current var memory values are based upon
     mem_values = MemValues()
     mem_instrs = defaultdict(dict)  # {(var_, offset, size): instr_i}, eliminates dead writes
     dead_instrs = set()
@@ -278,7 +278,7 @@ def sa_mem_elim(instrs):
             var_map[instr[0]] = (instr[3], instr[4] if instr[2] == '+' else -instr[4])
         elif instr[1].endswith(']='):
             var = instr[0]
-            var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
+            var, offset = (0, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][1:-2])
             # check for dead writes
             if (var, offset, size) in mem_instrs:
@@ -291,7 +291,7 @@ def sa_mem_elim(instrs):
             mem_values.write(offset, size, instr[2:])
         elif instr[1].startswith('=[') and len(instr) == 3:
             var = instr[2]
-            var, offset = (None, var) if isinstance(var, int) else var_map.get(var, (var, 0))
+            var, offset = (0, var) if isinstance(var, int) else var_map.get(var, (var, 0))
             size = int(instr[1][2:-1])
             if var == mem_var and mem_values.has(offset, size):
                 # we know the value, so don't need to read from memory

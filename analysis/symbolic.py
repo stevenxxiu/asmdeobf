@@ -98,6 +98,8 @@ class SymbolicEmu:
         self.regs.update({name: sympify(val) for name, val in {
             '$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0,
         }.items()})
+        self.mem_var = 0
+        self.mem = MemValues(self.names)
         self.stack = MemValues(self.names)
 
     def propagate_affected(self, reg):
@@ -112,6 +114,19 @@ class SymbolicEmu:
 
     def _conv_instr_val(self, val):
         return self.regs[val] if val in self.regs else sympify(val)
+
+    @staticmethod
+    def _conv_mem_access(addr):
+        '''
+        Convert an expression to `var + offset` if possible.
+        '''
+        if addr.is_Integer:
+            return 0, int(addr)
+        elif addr.is_Symbol:
+            return addr, 0
+        elif addr.is_Add and addr.args[1].is_Symbol and addr.args[0].is_Integer:
+            return addr.args[1], addr.args[0]
+        return None, None
 
     def step(self, instrs):
         instr_stack = []
@@ -156,17 +171,22 @@ class SymbolicEmu:
             elif instr.startswith('=['):
                 addr, val = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
                 size = int(instr[2:-1])
-                if addr == Symbol('esp_0'):
-                    self.stack.write(0, size, val)
-                elif addr.is_Add and addr.args[1] == Symbol('esp_0') and addr.args[0].is_Integer:
-                    self.stack.write(int(addr.args[0]), size, val)
+                var, offset = self._conv_mem_access(addr)
+                if var not in (self.mem_var, Symbol('esp_0')):
+                    self.mem_var = var
+                    self.mem.invalidate()
+                if var == Symbol('esp_0'):
+                    self.stack.write(offset, size, val)
+                elif var is not None:
+                    self.mem.write(offset, size, val)
             elif instr.startswith('['):
                 addr = self._conv_instr_val(instr_stack.pop())
                 size = int(instr[1:-1])
-                if addr == Symbol('esp_0'):
-                    val = self.stack.read(0, size)
-                elif addr.is_Add and addr.args[1] == Symbol('esp_0') and addr.args[0].is_Integer:
-                    val = self.stack.read(int(addr.args[0]), size)
+                var, offset = self._conv_mem_access(addr)
+                if var == Symbol('esp_0'):
+                    val = self.stack.read(offset, size)
+                elif var is not None:
+                    val = self.mem.read(offset, size)
                 else:
                     val = self.names['mem']
                 instr_stack.append(val)
