@@ -18,7 +18,8 @@ class FuncExtract:
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
-    def extract_func(self, start_addr, funcs, is_oep_func=False):
+    def extract_func(self, start_addr, funcs, is_oep_func=False, assume_new=()):
+        assume_new = set(assume_new)
         addr_to_block = {}  # {addr: (block, i)}
         block_to_addr = {}  # {(block, i): addr}
         stack = [(start_addr, {}, {})]  # [(addr, emu_state, flags)]
@@ -45,7 +46,7 @@ class FuncExtract:
                     break
 
                 # if address is already found (through conditional jmps)
-                if cur_addr in addr_to_block and not is_oep_block:
+                if cur_addr in addr_to_block and cur_addr not in assume_new:
                     block.children = [cur_addr]
                     block, i = addr_to_block[cur_addr]
                     if i == 0:
@@ -120,7 +121,7 @@ class FuncExtract:
             addrs.update(block.children)
         funcs[start_addr] = Function(start_addr, {addr: addr_to_block[addr][0] for addr in addrs})
 
-    def extract_funcs(self, addr, is_oep_func=True):
+    def extract_funcs(self, addr, is_oep_func=True, assume_new=()):
         funcs = {}
-        self.extract_func(addr, funcs, is_oep_func)
+        self.extract_func(addr, funcs, is_oep_func, assume_new)
         return sorted(funcs.values())
