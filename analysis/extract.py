@@ -18,8 +18,10 @@ class FuncExtract:
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
-    def extract_func(self, start_addr, funcs, is_oep_func=False, assume_new=()):
+    def extract_func(self, start_addr, funcs, is_oep_func, assume_new, end_addrs):
         assume_new = set(assume_new)
+        end_addrs = set(end_addrs)
+
         addr_to_block = {}  # {addr: (block, i)}
         block_to_addr = {}  # {(block, i): addr}
         stack = [(start_addr, {}, {})]  # [(addr, emu_state, flags)]
@@ -70,7 +72,8 @@ class FuncExtract:
                 block_to_addr[(id(block), len(block.instrs))] = cur_addr
                 block.instrs.append(instr)
 
-                if cur_addr == 0x00401E73:
+                # check if ended by user action
+                if cur_addr in end_addrs:
                     break
 
                 # update certain flag values for conditional branches
@@ -121,7 +124,7 @@ class FuncExtract:
             addrs.update(block.children)
         funcs[start_addr] = Function(start_addr, {addr: addr_to_block[addr][0] for addr in addrs})
 
-    def extract_funcs(self, addr, is_oep_func=True, assume_new=()):
+    def extract_funcs(self, addr, is_oep_func=True, assume_new=(), end_addrs=()):
         funcs = {}
-        self.extract_func(addr, funcs, is_oep_func, assume_new)
+        self.extract_func(addr, funcs, is_oep_func, assume_new, end_addrs)
         return sorted(funcs.values())
