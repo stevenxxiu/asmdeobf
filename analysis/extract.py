@@ -1,13 +1,29 @@
 import re
 
+from sympy import Symbol, sympify
+
 from analysis.block import Block
 from analysis.func import Function
 from analysis.winapi import WinAPI
+from analysis.symbolic import SymbolicEmu, SymbolNames, ConstConstraint
 
 
 class FuncExtract:
-    def __init__(self, r):
+    def __init__(self, r, start_addr, funcs, is_oep, assume_new, end_addrs):
         self.r = r
+        self.start_addr = start_addr
+        self.funcs = funcs
+        self.is_oep = is_oep
+        self.assume_new = set(assume_new)
+        self.end_addrs = set(end_addrs)
+
+        self.addr_to_constraint = {}  # {addr: constraint}
+        self.addr_to_block = {}  # {addr: (block, i)}
+        self.block_to_addr = {}  # {(block, i): addr}
+        self.names = SymbolNames()
+        self.stack = []  # [(addr, state)]
+        self.esp_0 = None
+
         self.winapi = WinAPI()
 
     def extract_esil(self, addr):
@@ -18,113 +34,118 @@ class FuncExtract:
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
-    def extract_func(self, start_addr, funcs, is_oep_func, assume_new, end_addrs):
-        assume_new = set(assume_new)
-        end_addrs = set(end_addrs)
+    def stack_append(self, addr, constraint_):
+        self.stack.append((addr, constraint_))
+        self.addr_to_constraint[addr] = constraint_
 
-        addr_to_block = {}  # {addr: (block, i)}
-        block_to_addr = {}  # {(block, i): addr}
-        stack = [(start_addr, {}, {})]  # [(addr, emu_state, flags)]
-        is_oep_block = is_oep_func
+    def extract_block(self, cur_addr, constraint):
+        state = constraint.to_state()
+        block = Block()
 
-        self.r.cmd('aei')
-        self.r.cmd('aeim')
+        # update radare state
+        for name, val in state.regs.items():
+            val = val.subs(Symbol('esp_0'), self.esp_0)
+            if not name.startswith('$') and val.is_Integer:
+                self.r.cmd(f'aer {name}={val}')
+        for (offset, size), val in state.stack.values.items():
+            if val.is_Integer:
+                self.r.cmd(f'ae {val},{self.esp_0 + offset},=[{size}]')
+        self.r.cmd(f's {cur_addr}')
+        self.r.cmd('aeip')
 
-        while stack:
-            cur_addr, emu_state, flags = stack.pop()
-            block = Block()
+        while True:
+            cur_addr = state.regs['eip']
+            if not cur_addr.is_Integer == 0:
+                break
+            cur_addr = int(cur_addr)
 
-            # update emulator
-            for state in emu_state, flags:
-                for var, val in state.items():
-                    if var is not None:
-                        self.r.cmd(f'aer {var}={val}')
-            self.r.cmd(f's {cur_addr}')
-            self.r.cmd('aeip')
+            # if address is already found (through conditional jmps)
+            if cur_addr in self.addr_to_block and cur_addr not in self.assume_new:
+                block.children = [cur_addr]
+                block, i = self.addr_to_block[cur_addr]
+                if i == 0:
+                    break
+                # split block in 2
+                # XXX re-run instructions from start of block and merge constraints
+                
+                n = len(block.instrs)
+                new_block = Block(block.instrs[:i], [cur_addr])
+                block.instrs = block.instrs[i:]
+                for j in range(i):
+                    self.addr_to_block[self.block_to_addr[(id(block), j)]] = new_block, j
+                for j in range(i, n):
+                    self.addr_to_block[self.block_to_addr[(id(block), j)]] = block, j - i
+                for j in range(i):
+                    self.block_to_addr[(id(new_block), j)] = self.block_to_addr.pop((id(block), j))
+                for j in range(i, n):
+                    self.block_to_addr[(id(block), j - i)] = self.block_to_addr.pop((id(block), j))
+                break
 
-            while True:
-                cur_addr = self.r.cmdj('aerj')['eip']
-                if cur_addr == 0:
+            instr = self.extract_esil(cur_addr)
+            self.addr_to_block[cur_addr] = (block, len(block.instrs))
+            self.block_to_addr[(id(block), len(block.instrs))] = cur_addr
+            block.instrs.append(instr)
+
+            # check if ended by user action
+            if cur_addr in self.end_addrs:
+                break
+
+            # check if we have a conditional jmp
+            matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
+            if matches:
+                flag = matches.group(2)
+                if not state.regs[flag].is_Integer:
+                    is_negated = bool(matches.group(3))
+                    constraint = ConstConstraint(state)
+                    # explore remaining code first before exploring jmp
+                    constraint.regs[flag] = sympify(int(not is_negated))
+                    self.stack_append(int(matches.group(4)), constraint.to_state(False, self.names))
+                    constraint.regs[flag] = sympify(int(is_negated))
+                    self.stack_append(int(matches.group(4)), constraint.to_state(False, self.names))
+                    block.condition = (flag, is_negated)
+                    block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
 
-                # if address is already found (through conditional jmps)
-                if cur_addr in addr_to_block and cur_addr not in assume_new:
-                    block.children = [cur_addr]
-                    block, i = addr_to_block[cur_addr]
-                    if i == 0:
-                        break
-                    # split block in 2
-                    n = len(block.instrs)
-                    new_block = Block(block.instrs[:i], [cur_addr])
-                    block.instrs = block.instrs[i:]
-                    for j in range(i):
-                        addr_to_block[block_to_addr[(id(block), j)]] = new_block, j
-                    for j in range(i, n):
-                        addr_to_block[block_to_addr[(id(block), j)]] = block, j - i
-                    for j in range(i):
-                        block_to_addr[(id(new_block), j)] = block_to_addr.pop((id(block), j))
-                    for j in range(i, n):
-                        block_to_addr[(id(block), j - i)] = block_to_addr.pop((id(block), j))
-                    break
-
-                instr = self.extract_esil(cur_addr)
-                addr_to_block[cur_addr] = (block, len(block.instrs))
-                block_to_addr[(id(block), len(block.instrs))] = cur_addr
-                block.instrs.append(instr)
-
-                # check if ended by user action
-                if cur_addr in end_addrs:
-                    break
-
-                # update certain flag values for conditional branches
-                for value, flag in re.findall(r'(\$\w+),(\wf),=', instr):
-                    flags[flag] = 0 if value == '$0' else 1 if value == '$1' else None
-                if re.match(r'\d+,eip,=,(\w+),\1,\^=', instr):
-                    flags['zf'] = 0
-
-                # check if we have a conditional jmp
-                matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
-                if matches and not is_oep_block:
-                    flag = matches.group(2)
-                    if flags.get(flag, None) is None:
-                        is_negated = bool(matches.group(3))
-                        # explore remaining code first before exploring jmp
-                        emu_state = self.r.cmdj('aerj')
-                        stack.append((int(matches.group(4)), emu_state, {flag: int(not is_negated)}))
-                        stack.append((int(matches.group(1)), emu_state, {flag: int(is_negated)}))
-                        block.condition = (flag, is_negated)
-                        block.children = [int(matches.group(4)), int(matches.group(1))]
-                        break
-
-                # check if instruction is a call to api
-                matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],(\d+),eip,=', instr)
-                if matches:
-                    ret_addr, call_addr = matches.group(1), matches.group(2)
-                    matches = re.match(r'(0x\d+),\[\],eip,=', self.r.cmdj(f'pdj 1 @ {call_addr}')[0]['esil'])
+            # check if instruction is a call to api
+            matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],(\d+),eip,=', instr)
+            if matches:
+                ret_addr, call_addr = matches.group(1), matches.group(2)
+                matches = re.match(r'(0x\d+),\[\],eip,=', self.r.cmdj(f'pdj 1 @ {call_addr}')[0]['esil'])
                 if matches:
                     api_addr = matches.group(1)
                     matches = re.match(r'sym\.imp\.(\S+)_(\S+)$', self.r.cmd(f'fd {api_addr}'))
-                if matches:
-                    # end current block to aid in de-obfuscation
-                    lib_name, api_name = matches.group(1), matches.group(2)
-                    self.r.cmd(f'ae {self.winapi.get_stack_change(lib_name, api_name)},esp,+=')
-                    emu_state = self.r.cmdj('aerj')
-                    stack.append((int(ret_addr), emu_state, {}))
-                    block.children = [int(ret_addr)]
-                    break
+                    if matches:
+                        # end current block to aid in de-obfuscation
+                        lib_name, api_name = matches.group(1), matches.group(2)
+                        self.r.cmd(f'ae {self.winapi.get_stack_change(lib_name, api_name)},esp,+=')
+                        self.stack_append(int(ret_addr), state)
+                        block.children = [int(ret_addr)]
+                        break
 
-                # check if instruction is a call to a proc
-                # check if function was already analyzed
+            # check if instruction is a call to a proc
+            # check if function was already analyzed
 
-                self.r.cmd('aes')
-            is_oep_block = False
+            state.step(instr)
+            self.r.cmd('aes')
 
-        addrs = {start_addr}
-        for block, i in addr_to_block.values():
+    def extract(self):
+        self.stack_append(self.start_addr, ConstConstraint(SymbolicEmu(self.is_oep, self.names)))
+        self.r.cmd('aei')
+        self.r.cmd('aeim')
+        self.esp_0 = int(self.r.cmd(f'aer esp'), 16)
+        while self.stack:
+            self.extract_block(*self.stack.pop())
+        addrs = {self.start_addr}
+        for block, i in self.addr_to_block.values():
             addrs.update(block.children)
-        funcs[start_addr] = Function(start_addr, {addr: addr_to_block[addr][0] for addr in addrs})
+        self.funcs[self.start_addr] = Function(self.start_addr, {addr: self.addr_to_block[addr][0] for addr in addrs})
+
+
+class FuncsExtract:
+    def __init__(self, r):
+        self.r = r
 
     def extract_funcs(self, addr, is_oep_func=True, assume_new=(), end_addrs=()):
         funcs = {}
-        self.extract_func(addr, funcs, is_oep_func, assume_new, end_addrs)
+        FuncExtract(self.r, addr, funcs, is_oep_func, assume_new, end_addrs).extract()
         return sorted(funcs.values())

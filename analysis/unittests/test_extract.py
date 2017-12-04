@@ -5,15 +5,15 @@ import unittest
 from sympy import sympify
 
 from analysis.block import Block
-from analysis.extract import FuncExtract
-from analysis.symbolic import SymbolicEmu
+from analysis.extract import FuncsExtract
+from analysis.symbolic import SymbolicEmu, SymbolNames
 
 
 class MockRadare:
     def __init__(self, instrs, base_addr):
         self.instrs = instrs
         self.base_addr = base_addr
-        self.emu = SymbolicEmu()
+        self.emu = SymbolicEmu(True, SymbolNames())
         for reg in self.emu.regs:
             self.emu.regs[reg] = sympify(0)
         for i in range(0, 100, 4):
@@ -58,7 +58,7 @@ class TestExtractFuncs(unittest.TestCase):
             0,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncExtract(r).extract_funcs(100)
+        funcs = FuncsExtract(r).extract_funcs(100)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -75,7 +75,7 @@ class TestExtractFuncs(unittest.TestCase):
             zf,?{,101,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -99,7 +99,7 @@ class TestExtractFuncs(unittest.TestCase):
             2,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -121,12 +121,12 @@ class TestExtractFuncs(unittest.TestCase):
     def test_fixed_jmp_const(self):
         # conditional jmp depends on constant flag
         r = MockRadare(textwrap.dedent('''
-            eax,eax,^=
+            eax,eax,^=,$z,zf,=
             zf,?{,103,eip,=,}
             1,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,eax,^=',
@@ -136,34 +136,14 @@ class TestExtractFuncs(unittest.TestCase):
             ], []),
         })
 
-    def test_fixed_jmp_no_longer_const(self):
-        # conditional jmp flag is no longer constant
-        r = MockRadare(textwrap.dedent('''
-            eax,eax,^=
-            $z,zf,=
-            zf,?{,103,eip,=,}
-            esp,[4],eip,=,4,esp,+=
-        ''').strip().split('\n'), 100)
-        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
-        self.assertEqual(funcs[0].blocks, {
-            100: Block([
-                '101,eip,=,eax,eax,^=',
-                '102,eip,=,$z,zf,=',
-                '103,eip,=,zf,?{,103,eip,=,}',
-            ], [103, 103], ('zf', False)),
-            103: Block([
-                '104,eip,=,esp,[4],eip,=,4,esp,+=',
-            ], []),
-        })
-
-    def test_fixed_jmp_precond(self):
-        # some flags are constant depending on conditional jmp location
+    def test_fixed_jmp_constraint(self):
+        # some flags are constrainted due to previous conditional jmp
         r = MockRadare(textwrap.dedent('''
             zf,?{,102,eip,=,}
             zf,?{,200,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',

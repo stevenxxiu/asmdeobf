@@ -1,7 +1,7 @@
 import r2pipe
 
 from analysis.block import sa_pprint, simplify_block
-from analysis.extract import FuncExtract
+from analysis.extract import FuncsExtract
 from analysis.func import simplify_func
 
 
@@ -14,7 +14,7 @@ def main():
         r.cmd('e io.cache=true')
 
         # extract funcs
-        funcs = FuncExtract(r).extract_funcs(
+        funcs = FuncsExtract(r).extract_funcs(
             r.cmdj('aerj')['eip'],
             assume_new=list(range(0x401BB4, 0x401D6C)) + list(range(0x401D77, 0x401DC7)),
             end_addrs=(0x00401E73,)

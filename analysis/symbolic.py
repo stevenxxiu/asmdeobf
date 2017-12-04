@@ -3,19 +3,42 @@ from copy import deepcopy
 
 from sympy import Symbol, sympify
 
-__all__ = ['ConstConstraint', 'MemValues', 'SymbolicEmu']
+__all__ = ['ConstConstraint', 'SymbolNames', 'MemValues', 'SymbolicEmu']
 
 
 class ConstConstraint:
+    '''
+    Constraints variables to be constant or `esp_0 + const`. Converts to/from a symbolic state.
+    '''
+
     def __init__(self, state):
-        # XXX get constraints
-        pass
+        self.regs = {name: val if self._is_constant(val) else None for name, val in state.regs.items()}
+        self.stack = {key: val if self._is_constant(val) else None for key, val in state.stack.items()}
+        self.mem = {key: val if self._is_constant(val) else None for key, val in state.mem.items()}
+
+    @staticmethod
+    def _is_constant(val):
+        if val.is_Integer:
+            return True
+        elif val == Symbol('esp_0'):
+            return True
+        elif val.args[1] == Symbol('esp_0') and val.args[0].is_Integer:
+            return True
+        return False
 
     def widen(self, other):
-        pass
+        for this, other in (self.regs, other.regs), (self.stack, other.stack), (self.mem, other.mem):
+            for name, val in other.items():
+                if val is None:
+                    this[name] = None
 
-    def to_state(self):
-        pass
+    def to_state(self, is_oep, names):
+        state = SymbolicEmu(is_oep, names)
+        for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
+            for name, val in this.items():
+                if val is not None:
+                    other[name] = val
+        return state
 
 
 class SymbolNames:
@@ -29,8 +52,8 @@ class SymbolNames:
 
 
 class MemValues:
-    def __init__(self, names=None):
-        self.names = names or {'mem': None}
+    def __init__(self, names):
+        self.names = names
         self.values = {}  # {(offset, size): value}
 
     def write(self, offset, size, value, can_overlap=True):
@@ -58,7 +81,8 @@ class SymbolicEmu:
     We assume the stack is separate from every other memory access, which is still sound enough.
     '''
 
-    def __init__(self):
+    def __init__(self, is_oep, names):
+        self.names = names
         self.bits = {
             'al': 8, 'ah': 8, 'ax': 16, 'eax': 32,
             'cl': 8, 'ch': 8, 'cx': 16, 'ecx': 32,
@@ -93,11 +117,9 @@ class SymbolicEmu:
                 if parent not in self.affected:
                     self.affected[parent] = {}
                 self.affected[parent][reg] = (0, self.bits[reg] - 1)
-        self.names = SymbolNames()
         self.regs = {reg: self.names[reg] for reg in self.bits}
-        self.regs.update({name: sympify(val) for name, val in {
-            '$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0,
-        }.items()})
+        for name, val in {'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0}:
+            self.regs[name] = sympify(val) if is_oep else self.names[name]
         self.mem_var = 0
         self.mem = MemValues(self.names)
         self.stack = MemValues(self.names)

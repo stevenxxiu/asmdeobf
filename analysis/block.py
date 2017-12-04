@@ -270,7 +270,7 @@ def sa_mem_elim(instrs):
     instrs_new = []
     var_map = {}  # maps `r2` to `(r1, 5)` if we have `r2 = r1 + 5`
     mem_var = 0  # current var memory values are based upon
-    mem_values = MemValues()
+    mem_values = MemValues({'mem': None})
     mem_instrs = defaultdict(dict)  # {(var_, offset, size): instr_i}, eliminates dead writes
     dead_instrs = set()
     for i, instr in enumerate(instrs):

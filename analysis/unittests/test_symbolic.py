@@ -1,11 +1,11 @@
 import unittest
 
-from analysis.symbolic import SymbolicEmu
+from analysis.symbolic import SymbolicEmu, SymbolNames
 
 
 class TestSymbolicEmu(unittest.TestCase):
     def setUp(self):
-        self.emu = SymbolicEmu()
+        self.emu = SymbolicEmu(True, SymbolNames())
 
     def test_const(self):
         self.emu.step('0,eax,=')
