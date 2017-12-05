@@ -9,12 +9,20 @@ __all__ = ['ConstConstraint', 'SymbolNames', 'MemValues', 'SymbolicEmu']
 class ConstConstraint:
     '''
     Constraints variables to be constant or `esp_0 + const`. Converts to/from a symbolic state.
+    oep is assumed if `state is None`.
     '''
 
-    def __init__(self, state):
-        self.regs = {name: val if self._is_constant(val) else None for name, val in state.regs.items()}
-        self.stack = {key: val if self._is_constant(val) else None for key, val in state.stack.items()}
-        self.mem = {key: val if self._is_constant(val) else None for key, val in state.mem.items()}
+    def __init__(self, state=None):
+        self.regs = {}
+        self.stack = {}
+        self.mem = {}
+        if state:
+            for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
+                for name, val in other.items():
+                    this[name] = val if self._is_constant(val) else None
+        else:
+            self.regs = {name: None for name in state.bits}
+            self.regs.update({'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0})
 
     @staticmethod
     def _is_constant(val):
@@ -32,8 +40,8 @@ class ConstConstraint:
                 if val is None:
                     this[name] = None
 
-    def to_state(self, is_oep, names):
-        state = SymbolicEmu(is_oep, names)
+    def to_state(self, names):
+        state = SymbolicEmu(names)
         for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
             for name, val in this.items():
                 if val is not None:
@@ -81,7 +89,7 @@ class SymbolicEmu:
     We assume the stack is separate from every other memory access, which is still sound enough.
     '''
 
-    def __init__(self, is_oep, names):
+    def __init__(self, names):
         self.names = names
         self.bits = {
             'al': 8, 'ah': 8, 'ax': 16, 'eax': 32,
@@ -94,6 +102,7 @@ class SymbolicEmu:
             'di': 16, 'edi': 32,
             'eip': 32,
             'cf': 1, 'pf': 1, 'af': 1, 'zf': 1, 'sf': 1, 'tf': 1, 'df': 1, 'of': 1,
+            '$c7': 1, '$c15': 1, '$c31': 1, '$p': 1, '$z': 1, '$s': 1, '$o': 1,
         }
         self.affected = {
             'al': {'ax': (0, 7)}, 'ah': {'ax': (8, 15)}, 'ax': {'eax': (0, 15)},
@@ -118,8 +127,6 @@ class SymbolicEmu:
                     self.affected[parent] = {}
                 self.affected[parent][reg] = (0, self.bits[reg] - 1)
         self.regs = {reg: self.names[reg] for reg in self.bits}
-        for name, val in {'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0}:
-            self.regs[name] = sympify(val) if is_oep else self.names[name]
         self.mem_var = 0
         self.mem = MemValues(self.names)
         self.stack = MemValues(self.names)

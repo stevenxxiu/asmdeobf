@@ -5,7 +5,7 @@ from analysis.symbolic import SymbolicEmu, SymbolNames
 
 class TestSymbolicEmu(unittest.TestCase):
     def setUp(self):
-        self.emu = SymbolicEmu(True, SymbolNames())
+        self.emu = SymbolicEmu(SymbolNames())
 
     def test_const(self):
         self.emu.step('0,eax,=')

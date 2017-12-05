@@ -6,14 +6,14 @@ from sympy import sympify
 
 from analysis.block import Block
 from analysis.extract import FuncsExtract
-from analysis.symbolic import SymbolicEmu, SymbolNames
+from analysis.symbolic import ConstConstraint, SymbolicEmu, SymbolNames
 
 
 class MockRadare:
     def __init__(self, instrs, base_addr):
         self.instrs = instrs
         self.base_addr = base_addr
-        self.emu = SymbolicEmu(True, SymbolNames())
+        self.emu = SymbolicEmu(SymbolNames())
         for reg in self.emu.regs:
             self.emu.regs[reg] = sympify(0)
         for i in range(0, 100, 4):
@@ -58,7 +58,7 @@ class TestExtractFuncs(unittest.TestCase):
             0,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -75,7 +75,7 @@ class TestExtractFuncs(unittest.TestCase):
             zf,?{,101,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -99,7 +99,7 @@ class TestExtractFuncs(unittest.TestCase):
             2,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,0,eax,=',
@@ -126,7 +126,7 @@ class TestExtractFuncs(unittest.TestCase):
             1,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,eax,eax,^=',
@@ -143,7 +143,7 @@ class TestExtractFuncs(unittest.TestCase):
             zf,?{,200,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, is_oep_func=False)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
         self.assertEqual(funcs[0].blocks, {
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',

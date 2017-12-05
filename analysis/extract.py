@@ -4,17 +4,16 @@ from sympy import Symbol, sympify
 
 from analysis.block import Block
 from analysis.func import Function
+from analysis.symbolic import ConstConstraint, SymbolNames
 from analysis.winapi import WinAPI
-from analysis.symbolic import SymbolicEmu, SymbolNames, ConstConstraint
 
 
 class FuncExtract:
-    def __init__(self, r, start_addr, funcs, is_oep, assume_new, end_addrs):
+    def __init__(self, r, start_addr, funcs, constraint, end_addrs):
         self.r = r
         self.start_addr = start_addr
         self.funcs = funcs
-        self.is_oep = is_oep
-        self.assume_new = set(assume_new)
+        self.constraint = constraint
         self.end_addrs = set(end_addrs)
 
         self.addr_to_constraint = {}  # {addr: constraint}
@@ -56,18 +55,19 @@ class FuncExtract:
         while True:
             cur_addr = state.regs['eip']
             if not cur_addr.is_Integer == 0:
+                self.end_addrs.add(int(cur_addr))
                 break
             cur_addr = int(cur_addr)
 
             # if address is already found (through conditional jmps)
-            if cur_addr in self.addr_to_block and cur_addr not in self.assume_new:
+            if cur_addr in self.addr_to_block:
                 block.children = [cur_addr]
                 block, i = self.addr_to_block[cur_addr]
                 if i == 0:
                     break
                 # split block in 2
                 # XXX re-run instructions from start of block and merge constraints
-                
+
                 n = len(block.instrs)
                 new_block = Block(block.instrs[:i], [cur_addr])
                 block.instrs = block.instrs[i:]
@@ -99,9 +99,9 @@ class FuncExtract:
                     constraint = ConstConstraint(state)
                     # explore remaining code first before exploring jmp
                     constraint.regs[flag] = sympify(int(not is_negated))
-                    self.stack_append(int(matches.group(4)), constraint.to_state(False, self.names))
+                    self.stack_append(int(matches.group(4)), constraint.to_state(self.names))
                     constraint.regs[flag] = sympify(int(is_negated))
-                    self.stack_append(int(matches.group(4)), constraint.to_state(False, self.names))
+                    self.stack_append(int(matches.group(4)), constraint.to_state(self.names))
                     block.condition = (flag, is_negated)
                     block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
@@ -129,7 +129,7 @@ class FuncExtract:
             self.r.cmd('aes')
 
     def extract(self):
-        self.stack_append(self.start_addr, ConstConstraint(SymbolicEmu(self.is_oep, self.names)))
+        self.stack_append(self.start_addr, self.constraint)
         self.r.cmd('aei')
         self.r.cmd('aeim')
         self.esp_0 = int(self.r.cmd(f'aer esp'), 16)
@@ -145,7 +145,13 @@ class FuncsExtract:
     def __init__(self, r):
         self.r = r
 
-    def extract_funcs(self, addr, is_oep_func=True, assume_new=(), end_addrs=()):
+    def extract_funcs(self, addr, constraint, end_addrs=()):
         funcs = {}
-        FuncExtract(self.r, addr, funcs, is_oep_func, assume_new, end_addrs).extract()
-        return sorted(funcs.values())
+        extract = FuncExtract(self.r, addr, funcs, constraint, end_addrs)
+        extract.extract()
+        constraint = None
+        for end_addr in extract.end_addrs:
+            if not constraint:
+                constraint = extract.addr_to_constraint[end_addr]
+            constraint.widen(extract.addr_to_constraint[end_addr])
+        return sorted(funcs.values()), constraint
