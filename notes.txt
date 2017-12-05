@@ -12,7 +12,9 @@ So this becomes abstract intrepretation. In order to update initial conditions p
 
 Calls also split a block in two to facilitate block-by-block deobfuscation.
 
-# De-obfuscation of the CFG
+In order to identify functions, we look at calls which have relatively large offsets (>=10). Some functions are useless, so we allow inlining. Simply ignoring these calls is not the same as inlining, since the analyzer might see them again and move them into a separate block, which hinders de-obfuscation within the same block.
+
+# De-obfuscation after the CFG is extracted
 De-obfuscation is done on the CFG, as well as block-by-block.
 
 # Self-modifying code
