@@ -16,7 +16,7 @@ Calls also split a block in two to facilitate block-by-block deobfuscation.
 De-obfuscation is done on the CFG, as well as block-by-block.
 
 # Self-modifying code
-The analysis supposes the program self-modifications do not modify already-executed code that will executed again, and handles this through the use of the radare emulator.
+The analysis supposes the program does not modify itself, although self-modifying instructions are still run through the radare emulator.
 
 If this is not the case for some parts of the program, we will provide an api to let the user hook addresses so fixed code can become some user-specified code to be handed to the analyzer.
 
