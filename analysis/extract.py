@@ -139,7 +139,13 @@ class FuncExtract:
         addrs = {self.start_addr}
         for block, i in self.addr_to_block.values():
             addrs.update(block.children)
-        self.funcs[self.start_addr] = Function(self.start_addr, {addr: self.addr_to_block[addr][0] for addr in addrs})
+        func = Function(self.start_addr, {addr: self.addr_to_block[addr][0] for addr in addrs})
+        constraint = None
+        for end_addr in self.end_addrs:
+            if not constraint:
+                constraint = self.addr_to_constraint[end_addr]
+            constraint.widen(self.addr_to_constraint[end_addr])
+        self.funcs[self.start_addr] = func, constraint
 
 
 class FuncsExtract:
@@ -148,11 +154,5 @@ class FuncsExtract:
 
     def extract_funcs(self, addr, constraint, end_addrs=()):
         funcs = {}
-        extract = FuncExtract(self.r, addr, funcs, constraint, end_addrs)
-        extract.extract()
-        constraint = None
-        for end_addr in extract.end_addrs:
-            if not constraint:
-                constraint = extract.addr_to_constraint[end_addr]
-            constraint.widen(extract.addr_to_constraint[end_addr])
-        return sorted(funcs.values()), constraint
+        FuncExtract(self.r, addr, funcs, constraint, end_addrs).extract()
+        return sorted(funcs.values())
