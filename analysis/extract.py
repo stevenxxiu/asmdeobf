@@ -26,9 +26,6 @@ class FuncExtract:
         self.winapi = WinAPI()
 
     def extract_esil(self, addr):
-        '''
-        Get esil at addr. Requires `e asm.esil=true`.
-        '''
         # update eip to facilitate analysis of conditional jmps and call
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}'
