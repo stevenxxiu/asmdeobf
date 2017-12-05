@@ -30,3 +30,6 @@ class WinAPI:
 
     def get_stack_change(self, lib_name, api_name):
         return self.stack_changes[self.normalize_lib_name(lib_name)][api_name]
+
+
+win_api = WinAPI()

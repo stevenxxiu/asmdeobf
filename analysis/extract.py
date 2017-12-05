@@ -5,7 +5,6 @@ from sympy import Symbol, sympify
 from analysis.block import Block
 from analysis.func import Function
 from analysis.symbolic import ConstConstraint, SymbolNames
-from analysis.winapi import WinAPI
 
 
 class FuncExtract:
@@ -23,8 +22,6 @@ class FuncExtract:
         self.stack = []  # [(addr, state)]
         self.esp_0 = None
 
-        self.winapi = WinAPI()
-
     def extract_esil(self, addr):
         # update eip to facilitate analysis of conditional jmps and call
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
@@ -35,7 +32,7 @@ class FuncExtract:
         self.addr_to_constraint[addr] = constraint_
 
     def extract_block(self, cur_addr, constraint):
-        state = constraint.to_state()
+        state = constraint.to_state(self.names)
         block = Block()
 
         # update radare state
@@ -60,11 +57,18 @@ class FuncExtract:
             if cur_addr in self.addr_to_block:
                 block.children = [cur_addr]
                 block, i = self.addr_to_block[cur_addr]
+
+                # merge previous constraints & re-analyze
+                prev_constraint = self.addr_to_constraint[cur_addr]
+                prev_state = prev_constraint.to_state(self.names)
+                for instr in self.addr_to_block[cur_addr].instrs:
+                    prev_state.step(instr)
+                prev_constraint.widen(constraint)
+                self.stack_append(cur_addr, prev_constraint)
+
+                # split block in 2
                 if i == 0:
                     break
-                # split block in 2
-                # XXX re-run instructions from start of block and merge constraints
-
                 n = len(block.instrs)
                 new_block = Block(block.instrs[:i], [cur_addr])
                 block.instrs = block.instrs[i:]
@@ -114,7 +118,7 @@ class FuncExtract:
                     if matches:
                         # end current block to aid in de-obfuscation
                         lib_name, api_name = matches.group(1), matches.group(2)
-                        self.r.cmd(f'ae {self.winapi.get_stack_change(lib_name, api_name)},esp,+=')
+                        state.step_api_call(lib_name, api_name)
                         self.stack_append(int(ret_addr), state)
                         block.children = [int(ret_addr)]
                         break

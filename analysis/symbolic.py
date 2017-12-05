@@ -3,6 +3,8 @@ from copy import deepcopy
 
 from sympy import Symbol, sympify
 
+from analysis.winapi import win_api
+
 __all__ = ['ConstConstraint', 'SymbolNames', 'MemValues', 'SymbolicEmu']
 
 
@@ -21,7 +23,7 @@ class ConstConstraint:
                 for name, val in other.items():
                     this[name] = val if self._is_constant(val) else None
         else:
-            self.regs = {name: None for name in state.bits}
+            self.regs = {name: None for name in SymbolicEmu.bits}
             self.regs.update({'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0})
 
     @staticmethod
@@ -89,21 +91,22 @@ class SymbolicEmu:
     We assume the stack is separate from every other memory access, which is still sound enough.
     '''
 
+    bits = {
+        'al': 8, 'ah': 8, 'ax': 16, 'eax': 32,
+        'cl': 8, 'ch': 8, 'cx': 16, 'ecx': 32,
+        'dl': 8, 'dh': 8, 'dx': 16, 'edx': 32,
+        'bl': 8, 'bh': 8, 'bx': 16, 'ebx': 32,
+        'sp': 16, 'esp': 32,
+        'bp': 16, 'ebp': 32,
+        'si': 16, 'esi': 32,
+        'di': 16, 'edi': 32,
+        'eip': 32,
+        'cf': 1, 'pf': 1, 'af': 1, 'zf': 1, 'sf': 1, 'tf': 1, 'df': 1, 'of': 1,
+        '$c7': 1, '$c15': 1, '$c31': 1, '$p': 1, '$z': 1, '$s': 1, '$o': 1,
+    }
+
     def __init__(self, names):
         self.names = names
-        self.bits = {
-            'al': 8, 'ah': 8, 'ax': 16, 'eax': 32,
-            'cl': 8, 'ch': 8, 'cx': 16, 'ecx': 32,
-            'dl': 8, 'dh': 8, 'dx': 16, 'edx': 32,
-            'bl': 8, 'bh': 8, 'bx': 16, 'ebx': 32,
-            'sp': 16, 'esp': 32,
-            'bp': 16, 'ebp': 32,
-            'si': 16, 'esi': 32,
-            'di': 16, 'edi': 32,
-            'eip': 32,
-            'cf': 1, 'pf': 1, 'af': 1, 'zf': 1, 'sf': 1, 'tf': 1, 'df': 1, 'of': 1,
-            '$c7': 1, '$c15': 1, '$c31': 1, '$p': 1, '$z': 1, '$s': 1, '$o': 1,
-        }
         self.affected = {
             'al': {'ax': (0, 7)}, 'ah': {'ax': (8, 15)}, 'ax': {'eax': (0, 15)},
             'cl': {'cx': (0, 7)}, 'ch': {'cx': (8, 15)}, 'cx': {'ecx': (0, 15)},
@@ -226,5 +229,17 @@ class SymbolicEmu:
             else:
                 raise ValueError('instr', instr)
 
-    def step_api_call(self, stack_size):
-        pass
+    def step_api_call(self, lib_name, api_name):
+        for reg in self.regs:
+            if reg != 'esp':
+                self.regs[reg] = self.names[reg]
+        self.mem.invalidate()
+        stack_change = win_api.get_stack_change(lib_name, api_name)
+        var, offset = self._conv_mem_access(self.regs['esp'])
+        if var == Symbol('esp_0'):
+            for mem_offset, mem_size in list(self.stack.values.values()):
+                if mem_offset + mem_size <= offset + stack_change:
+                    self.stack.values.pop(mem_offset, mem_size)
+        else:
+            self.stack.invalidate()
+        self.regs['esp'] += stack_change
