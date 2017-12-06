@@ -232,17 +232,17 @@ class SymbolicEmu:
             else:
                 raise ValueError('instr', instr)
 
-    def step_api_call(self, lib_name, api_name):
+    def step_api_jmp(self, lib_name, api_name):
         for reg in self.regs:
             if reg != 'esp':
                 self.regs[reg] = self.names[reg]
         self.mem.invalidate()
-        stack_change = win_api.get_stack_change(lib_name, api_name)
+        stack_change = win_api.get_stack_change(lib_name, api_name) + 4
         var, offset = self._conv_mem_access(self.regs['esp'])
         if var == Symbol('esp_0'):
-            for mem_offset, mem_size in list(self.stack.values.values()):
-                if mem_offset + mem_size <= offset + stack_change:
-                    self.stack.values.pop(mem_offset, mem_size)
+            for mem_offset, mem_size in list(self.stack.values):
+                if mem_offset < offset + stack_change:
+                    self.stack.values.pop((mem_offset, mem_size))
         else:
             self.stack.invalidate()
         self.regs['esp'] += stack_change

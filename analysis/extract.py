@@ -119,7 +119,7 @@ class FuncExtract:
                     if matches:
                         # end current block to aid in de-obfuscation
                         lib_name, api_name = matches.group(1), matches.group(2)
-                        state.step_api_call(lib_name, api_name)
+                        state.step_api_jmp(lib_name, api_name)
                         self.stack_append(int(ret_addr), state)
                         block.children = [int(ret_addr)]
                         break
