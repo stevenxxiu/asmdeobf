@@ -59,12 +59,13 @@ class FuncExtract:
                 block, i = self.addr_to_block[cur_addr]
 
                 # merge previous constraints & re-analyze
-                prev_constraint = self.addr_to_constraint[cur_addr]
-                prev_state = prev_constraint.to_state(self.names)
-                for instr in self.addr_to_block[cur_addr].instrs:
-                    prev_state.step(instr)
-                prev_constraint.widen(constraint)
-                self.stack_append(cur_addr, prev_constraint)
+                prev_constraint = self.addr_to_constraint[self.block_to_addr[block, 0]]
+                if i != 0 or prev_constraint != constraint:
+                    prev_state = prev_constraint.to_state(self.names)
+                    for instr in block.instrs:
+                        prev_state.step(instr)
+                    prev_constraint.widen(constraint)
+                    self.stack_append(cur_addr, prev_constraint)
 
                 # split block in 2
                 if i == 0:

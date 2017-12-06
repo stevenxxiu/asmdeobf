@@ -26,6 +26,9 @@ class ConstConstraint:
             self.regs = {name: None for name in SymbolicEmu.bits}
             self.regs.update({'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0})
 
+    def __eq__(self, other):
+        return self.regs == other.regs and self.stack == other.stack and self.mem == other.mem
+
     @staticmethod
     def _is_constant(val):
         if val.is_Integer:
