@@ -1,11 +1,12 @@
 import re
 import textwrap
-import unittest
 
+from expects import *
 from sympy import sympify
 
 from analysis.block import Block
 from analysis.extract import FuncsExtract
+from analysis.specs._stub import *
 from analysis.symbolic import ConstConstraint, SymbolicEmu, SymbolNames
 
 
@@ -52,22 +53,37 @@ class MockRadare:
         raise ValueError('cmd', cmd)
 
 
-class TestExtractFuncs(unittest.TestCase):
-    def test_simple(self):
+with description('ExtractFuncs'):
+    with it('stops analyzing if return address is variable'):
         r = MockRadare(textwrap.dedent('''
-            0,eax,=
+            eax,4,esp,-=,esp,=[4]
+            esp,[4],eip,=,4,esp,+=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        self.assertEqual(funcs[0].blocks, {
+        expect(funcs[0].blocks).to(equal({
             100: Block([
-                '101,eip,=,0,eax,=',
-                '102,eip,=,esp,[4],eip,=,4,esp,+='
+                '101,eip,=,eax,4,esp,-=,esp,=[4]',
+                '102,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
-        })
+        }))
 
-    def test_cond_jmp_existing(self):
-        # test conditional jmp into middle of existing block to break up block
+    with it('keeps on analyzing if return address is constant'):
+        r = MockRadare(textwrap.dedent('''
+            102,4,esp,-=,esp,=[4]
+            esp,[4],eip,=,4,esp,+=
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
+        expect(funcs[0].blocks).to(equal({
+            100: Block([
+                '101,eip,=,102,4,esp,-=,esp,=[4]',
+                '102,eip,=,esp,[4],eip,=,4,esp,+=',
+                '103,eip,=,esp,[4],eip,=,4,esp,+=',
+            ], []),
+        }))
+
+    with it('breaks up an existing block if there is a conditional jmp into it'):
         r = MockRadare(textwrap.dedent('''
             0,eax,=
             1,eax,=
@@ -76,7 +92,7 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        self.assertEqual(funcs[0].blocks, {
+        expect(funcs[0].blocks).to(equal({
             100: Block([
                 '101,eip,=,0,eax,=',
             ], [101]),
@@ -84,42 +100,13 @@ class TestExtractFuncs(unittest.TestCase):
                 '102,eip,=,1,eax,=',
                 '103,eip,=,2,eax,=',
                 '104,eip,=,zf,?{,101,eip,=,}'
-            ], [101, 104], ('zf', False)),
+            ], [101, 104], ('zf', 0)),
             104: Block([
                 '105,eip,=,esp,[4],eip,=,4,esp,+='
             ], []),
-        })
+        }))
 
-    def test_cond_jmp_new(self):
-        # test conditional jmp into new block to break up block
-        r = MockRadare(textwrap.dedent('''
-            0,eax,=
-            zf,?{,103,eip,=,}
-            1,eax,=
-            2,eax,=
-            esp,[4],eip,=,4,esp,+=
-        ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        self.assertEqual(funcs[0].blocks, {
-            100: Block([
-                '101,eip,=,0,eax,=',
-                '102,eip,=,zf,?{,103,eip,=,}'
-            ], [103, 102], ('zf', False)),
-            102: Block([
-                '103,eip,=,1,eax,=',
-            ], [103]),
-            103: Block([
-                '104,eip,=,2,eax,=',
-                '105,eip,=,esp,[4],eip,=,4,esp,+='
-            ], []),
-        })
-
-    def test_cond_ret(self):
-        # requires restoration of esp and identifying we landed on an existing addresses
-        pass
-
-    def test_fixed_jmp_const(self):
-        # conditional jmp depends on constant flag
+    with it('ignores conditional jmps if there are constant flags'):
         r = MockRadare(textwrap.dedent('''
             eax,eax,^=,$z,zf,=
             zf,?{,103,eip,=,}
@@ -127,31 +114,30 @@ class TestExtractFuncs(unittest.TestCase):
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        self.assertEqual(funcs[0].blocks, {
+        expect(funcs[0].blocks).to(equal({
             100: Block([
-                '101,eip,=,eax,eax,^=',
+                '101,eip,=,eax,eax,^=,$z,zf,=',
                 '102,eip,=,zf,?{,103,eip,=,}',
                 '103,eip,=,1,eax,=',
                 '104,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
-        })
+        }))
 
-    def test_fixed_jmp_constraint(self):
-        # some flags are constrainted due to previous conditional jmp
+    with it('adds flag constraints to conditional jmp targets'):
         r = MockRadare(textwrap.dedent('''
             zf,?{,102,eip,=,}
             zf,?{,200,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        self.assertEqual(funcs[0].blocks, {
+        expect(funcs[0].blocks).to(equal({
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',
-            ], [102, 101], ('zf', False)),
+            ], [102, 101], ('zf', 0)),
             101: Block([
                 '102,eip,=,zf,?{,200,eip,=,}',
             ], [102]),
             102: Block([
                 '103,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
-        })
+        }))

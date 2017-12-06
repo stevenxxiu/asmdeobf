@@ -23,8 +23,10 @@ class ConstConstraint:
                 for name, val in other.items():
                     this[name] = val if self._is_constant(val) else None
         else:
-            self.regs = {name: None for name in SymbolicEmu.bits}
-            self.regs.update({'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0})
+            for name in SymbolicEmu.bits:
+                self.regs[name] = None
+            for name, val in {'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0}.items():
+                self.regs[name] = sympify(val)
 
     def __eq__(self, other):
         return self.regs == other.regs and self.stack == other.stack and self.mem == other.mem
@@ -35,7 +37,7 @@ class ConstConstraint:
             return True
         elif val == Symbol('esp_0'):
             return True
-        elif val.args[1] == Symbol('esp_0') and val.args[0].is_Integer:
+        elif val.is_Add and val.args[0].is_Integer and val.args[1] == Symbol('esp_0'):
             return True
         return False
 
@@ -159,7 +161,7 @@ class SymbolicEmu:
             return 0, int(addr)
         elif addr.is_Symbol:
             return addr, 0
-        elif addr.is_Add and addr.args[1].is_Symbol and addr.args[0].is_Integer:
+        elif addr.is_Add and addr.args[0].is_Integer and addr.args[1].is_Symbol:
             return addr.args[1], addr.args[0]
         return None, None
 
@@ -188,6 +190,17 @@ class SymbolicEmu:
             elif instr == '+=':
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = self.regs[reg] + val
+                self.regs['$c7'] = self.names['cf']
+                self.regs['$c15'] = self.names['cf']
+                self.regs['$c31'] = self.names['cf']
+                self.regs['$p'] = self.names['pf']
+                self.regs['$z'] = self.names['zf']
+                self.regs['$s'] = self.names['sf']
+                self.regs['$o'] = self.names['of']
+                self.propagate_affected(reg)
+            elif instr == '-=':
+                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
+                self.regs[reg] = self.regs[reg] - val
                 self.regs['$c7'] = self.names['cf']
                 self.regs['$c15'] = self.names['cf']
                 self.regs['$c31'] = self.names['cf']

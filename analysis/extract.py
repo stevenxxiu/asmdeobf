@@ -12,7 +12,8 @@ class FuncExtract:
         self.r = r
         self.start_addr = start_addr
         self.funcs = funcs
-        self.constraint = constraint
+        self.start_constraint = constraint
+        self.end_constraint = None
         self.end_addrs = set(end_addrs)
 
         self.addr_to_constraint = {}  # {addr: constraint}
@@ -27,11 +28,17 @@ class FuncExtract:
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
+    def block_append_instr(self, block, addr, instr):
+        self.addr_to_block[addr] = (block, len(block.instrs))
+        self.block_to_addr[(id(block), len(block.instrs))] = addr
+        block.instrs.append(instr)
+
     def stack_append(self, addr, constraint_):
         self.stack.append((addr, constraint_))
         self.addr_to_constraint[addr] = constraint_
 
     def extract_block(self, cur_addr, constraint):
+        constraint.regs['eip'] = sympify(cur_addr)
         state = constraint.to_state(self.names)
         block = Block()
 
@@ -48,45 +55,44 @@ class FuncExtract:
 
         while True:
             cur_addr = state.regs['eip']
-            if not cur_addr.is_Integer == 0:
-                self.end_addrs.add(int(cur_addr))
+            if not cur_addr.is_Integer:
+                constraint = ConstConstraint(state)
+                if self.end_constraint is None:
+                    self.end_constraint = constraint
+                else:
+                    self.end_constraint.widen(constraint)
                 break
             cur_addr = int(cur_addr)
 
             # if address is already found (through conditional jmps)
             if cur_addr in self.addr_to_block:
-                block.children = [cur_addr]
                 block, i = self.addr_to_block[cur_addr]
+                constraint = ConstConstraint(state)
+                prev_constraint = self.addr_to_constraint[self.block_to_addr[(id(block), 0)]]
+                if i != 0 or constraint != prev_constraint:
+                    # remove old block
+                    addrs = []
+                    for j in range(len(block.instrs)):
+                        addrs.append(self.block_to_addr[(id(block), j)])
+                        self.addr_to_block.pop(addrs[-1])
+                        self.block_to_addr.pop((id(block), j))
 
-                # merge previous constraints & re-analyze
-                prev_constraint = self.addr_to_constraint[self.block_to_addr[block, 0]]
-                if i != 0 or prev_constraint != constraint:
+                    # add new block (slice of old block until i)
+                    new_block = Block(children=[cur_addr])
+                    for addr, instr in zip(addrs[:i], block.instrs[:i]):
+                        self.block_append_instr(new_block, addr, instr)
+
+                    # update constraints & re-analyze
                     prev_state = prev_constraint.to_state(self.names)
-                    for instr in block.instrs:
+                    for instr in block.instrs[:i]:
                         prev_state.step(instr)
-                    prev_constraint.widen(constraint)
-                    self.stack_append(cur_addr, prev_constraint)
-
-                # split block in 2
-                if i == 0:
-                    break
-                n = len(block.instrs)
-                new_block = Block(block.instrs[:i], [cur_addr])
-                block.instrs = block.instrs[i:]
-                for j in range(i):
-                    self.addr_to_block[self.block_to_addr[(id(block), j)]] = new_block, j
-                for j in range(i, n):
-                    self.addr_to_block[self.block_to_addr[(id(block), j)]] = block, j - i
-                for j in range(i):
-                    self.block_to_addr[(id(new_block), j)] = self.block_to_addr.pop((id(block), j))
-                for j in range(i, n):
-                    self.block_to_addr[(id(block), j - i)] = self.block_to_addr.pop((id(block), j))
+                    constraint.widen(prev_constraint)
+                    self.stack_append(cur_addr, constraint)
                 break
 
+            # append instruction
             instr = self.extract_esil(cur_addr)
-            self.addr_to_block[cur_addr] = (block, len(block.instrs))
-            self.block_to_addr[(id(block), len(block.instrs))] = cur_addr
-            block.instrs.append(instr)
+            self.block_append_instr(block, cur_addr, instr)
 
             # check if ended by user action
             if cur_addr in self.end_addrs:
@@ -98,13 +104,14 @@ class FuncExtract:
                 flag = matches.group(2)
                 if not state.regs[flag].is_Integer:
                     is_negated = bool(matches.group(3))
-                    constraint = ConstConstraint(state)
                     # explore remaining code first before exploring jmp
+                    constraint = ConstConstraint(state)
                     constraint.regs[flag] = sympify(int(not is_negated))
-                    self.stack_append(int(matches.group(4)), constraint.to_state(self.names))
+                    self.stack_append(int(matches.group(4)), constraint)
+                    constraint = ConstConstraint(state)
                     constraint.regs[flag] = sympify(int(is_negated))
-                    self.stack_append(int(matches.group(4)), constraint.to_state(self.names))
-                    block.condition = (flag, is_negated)
+                    self.stack_append(int(matches.group(1)), constraint)
+                    block.condition = (flag, int(is_negated))
                     block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
 
@@ -131,22 +138,17 @@ class FuncExtract:
             self.r.cmd('aes')
 
     def extract(self):
-        self.stack_append(self.start_addr, self.constraint)
+        self.stack_append(self.start_addr, self.start_constraint)
         self.r.cmd('aei')
         self.r.cmd('aeim')
-        self.esp_0 = int(self.r.cmd(f'aer esp'), 16)
+        self.esp_0 = self.r.cmdj(f'aerj')['esp']
         while self.stack:
             self.extract_block(*self.stack.pop())
         addrs = {self.start_addr}
         for block, i in self.addr_to_block.values():
             addrs.update(block.children)
         func = Function(self.start_addr, {addr: self.addr_to_block[addr][0] for addr in addrs})
-        constraint = None
-        for end_addr in self.end_addrs:
-            if not constraint:
-                constraint = self.addr_to_constraint[end_addr]
-            constraint.widen(self.addr_to_constraint[end_addr])
-        self.funcs[self.start_addr] = func, constraint
+        self.funcs[self.start_addr] = func, self.end_constraint
 
 
 class FuncsExtract:
