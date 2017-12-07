@@ -139,7 +139,7 @@ class SymbolicEmu:
         self.mem = MemValues(self.names)
         self.stack = MemValues(self.names)
 
-    def propagate_affected(self, reg):
+    def _propagate_affected(self, reg):
         for parent, bits in self.affected.get(reg, {}).items():
             if self.regs[parent].is_Integer and self.regs[reg].is_Integer:
                 parent_val = int(self.regs[parent])
@@ -165,6 +165,23 @@ class SymbolicEmu:
             return addr.args[1], addr.args[0]
         return None, None
 
+    def _update_flags(self, value, flags):
+        for flag in flags:
+            if flag == '$c7':
+                self.regs[flag] = self.names['cf']
+            elif flag == '$c15':
+                self.regs[flag] = self.names['cf']
+            elif flag == '$c31':
+                self.regs[flag] = self.names['cf']
+            elif flag == '$p':
+                self.regs[flag] = self.names['pf']
+            elif flag == '$z':
+                self.regs[flag] = sympify(0) if value == 0 else self.names['zf']
+            elif flag == '$s':
+                self.regs[flag] = self.names['sf']
+            elif flag == '$o':
+                self.regs[flag] = self.names['of']
+
     def step(self, instrs):
         instr_stack = []
         condition = 1
@@ -186,36 +203,31 @@ class SymbolicEmu:
             elif instr == '=':
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = val
-                self.propagate_affected(reg)
+                self._propagate_affected(reg)
             elif instr == '+=':
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = self.regs[reg] + val
-                self.regs['$c7'] = self.names['cf']
-                self.regs['$c15'] = self.names['cf']
-                self.regs['$c31'] = self.names['cf']
-                self.regs['$p'] = self.names['pf']
-                self.regs['$z'] = self.names['zf']
-                self.regs['$s'] = self.names['sf']
-                self.regs['$o'] = self.names['of']
-                self.propagate_affected(reg)
+                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
+                self._propagate_affected(reg)
+            elif instr == '++=':
+                reg = instr_stack.pop()
+                self.regs[reg] = self.regs[reg] + 1
+                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
+                self._propagate_affected(reg)
             elif instr == '-=':
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = self.regs[reg] - val
-                self.regs['$c7'] = self.names['cf']
-                self.regs['$c15'] = self.names['cf']
-                self.regs['$c31'] = self.names['cf']
-                self.regs['$p'] = self.names['pf']
-                self.regs['$z'] = self.names['zf']
-                self.regs['$s'] = self.names['sf']
-                self.regs['$o'] = self.names['of']
-                self.propagate_affected(reg)
+                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
+                self._propagate_affected(reg)
+            elif instr == '--=':
+                reg, val = instr_stack.pop()
+                self.regs[reg] = self.regs[reg] - 1
+                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
             elif instr == '^=':
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = sympify(0) if self.regs[reg] == val else self.names[reg]
-                self.regs['$p'] = self.names['pf']
-                self.regs['$z'] = sympify(0) if self.regs[reg] == 0 else self.names['zf']
-                self.regs['$s'] = self.names['sf']
-                self.propagate_affected(reg)
+                self._update_flags(self.regs[reg], ['$p', '$z', '$s'])
+                self._propagate_affected(reg)
             elif instr.startswith('=['):
                 addr, val = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
                 size = int(instr[2:-1])

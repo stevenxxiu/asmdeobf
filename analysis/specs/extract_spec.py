@@ -83,6 +83,26 @@ with description('ExtractFuncs'):
             ], []),
         }))
 
+    with it('breaks up an existing block if there is a jmp into it'):
+        r = MockRadare(textwrap.dedent('''
+            0,eax,=
+            1,eax,=
+            2,eax,=
+            101,eip,=
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
+        expect(funcs[0].blocks).to(equal({
+            100: Block([
+                '101,eip,=,0,eax,=',
+            ], [101]),
+            101: Block([
+                '102,eip,=,1,eax,=',
+                '103,eip,=,2,eax,=',
+                '104,eip,=,101,eip,='
+            ], [101]),
+        }))
+
     with it('breaks up an existing block if there is a conditional jmp into it'):
         r = MockRadare(textwrap.dedent('''
             0,eax,=
@@ -109,7 +129,7 @@ with description('ExtractFuncs'):
     with it('ignores conditional jmps if there are constant flags'):
         r = MockRadare(textwrap.dedent('''
             eax,eax,^=,$z,zf,=
-            zf,?{,103,eip,=,}
+            zf,?{,200,eip,=,}
             1,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
@@ -117,9 +137,34 @@ with description('ExtractFuncs'):
         expect(funcs[0].blocks).to(equal({
             100: Block([
                 '101,eip,=,eax,eax,^=,$z,zf,=',
-                '102,eip,=,zf,?{,103,eip,=,}',
+                '102,eip,=,zf,?{,200,eip,=,}',
                 '103,eip,=,1,eax,=',
                 '104,eip,=,esp,[4],eip,=,4,esp,+=',
+            ], []),
+        }))
+
+    with it('breaks-up & re-analyzes existing block if the constraint is no longer constant'):
+        r = MockRadare(textwrap.dedent('''
+            eax,eax,^=,$z,zf,=
+            zf,?{,104,eip,=,}
+            ebx,eax,+=,$z,zf,=
+            101,eip,=
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
+        expect(funcs[0].blocks).to(equal({
+            100: Block([
+                '101,eip,=,eax,eax,^=,$z,zf,=',
+            ], [101]),
+            101: Block([
+                '102,eip,=,zf,?{,104,eip,=,}',
+            ], [104, 102], ('zf', 0)),
+            102: Block([
+                '103,eip,=,ebx,eax,+=,$z,zf,=',
+                '104,eip,=,101,eip,=',
+            ], [101]),
+            104: Block([
+                '105,eip,=,esp,[4],eip,=,4,esp,+=',
             ], []),
         }))
 

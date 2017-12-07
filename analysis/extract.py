@@ -66,9 +66,12 @@ class FuncExtract:
 
             # if address is already found (through conditional jmps)
             if cur_addr in self.addr_to_block:
+                block.children = [cur_addr]
                 block, i = self.addr_to_block[cur_addr]
                 constraint = ConstConstraint(state)
                 prev_constraint = self.addr_to_constraint[self.block_to_addr[(id(block), 0)]]
+                if i == 0:
+                    constraint.widen(prev_constraint)
                 if i != 0 or constraint != prev_constraint:
                     # remove old block
                     addrs = []
