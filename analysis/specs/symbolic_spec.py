@@ -32,6 +32,10 @@ with description('SymbolicEmu'):
         self.emu.step('1,eax,+=')
         expect(self.emu.regs['eax']).to(equal(Symbol('eax_0') + 1))
 
+    with it('increments using sympy expressions'):
+        self.emu.step('eax,++=')
+        expect(self.emu.regs['eax']).to(equal(Symbol('eax_0') + 1))
+
     with it('clears register and sets zero flag when xoring with same value'):
         self.emu.step('eax,eax,^=')
         expect(self.emu.regs['eax']).to(equal(0))

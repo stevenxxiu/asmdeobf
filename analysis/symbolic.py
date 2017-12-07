@@ -14,18 +14,16 @@ class ConstConstraint:
     oep is assumed if `state is None`.
     '''
 
-    def __init__(self, state=None):
-        self.regs = {}
+    def __init__(self, state=None, is_oep=False):
+        self.regs = {name: None for name in SymbolicEmu.bits}
         self.stack = {}
         self.mem = {}
         if state:
             for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
                 for name, val in other.items():
                     this[name] = val if self._is_constant(val) else None
-        else:
-            for name in SymbolicEmu.bits:
-                self.regs[name] = None
-            for name, val in {'$c7': 0, '$c15': 0, '$c31': 0, '$p': 1, '$z': 1, '$s': 0, '$o': 0}.items():
+        if is_oep:
+            for name, val in {'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'of': 0}.items():
                 self.regs[name] = sympify(val)
 
     def __eq__(self, other):
@@ -107,7 +105,7 @@ class SymbolicEmu:
         'di': 16, 'edi': 32,
         'eip': 32,
         'cf': 1, 'pf': 1, 'af': 1, 'zf': 1, 'sf': 1, 'tf': 1, 'df': 1, 'of': 1,
-        '$c7': 1, '$c15': 1, '$c31': 1, '$p': 1, '$z': 1, '$s': 1, '$o': 1,
+        '$b4': 1, '$b8': 1, '$b32': 1, '$c7': 1, '$c15': 1, '$c31': 1, '$p': 1, '$z': 1, '$s': 1, '$o': 1,
     }
 
     def __init__(self, names):
@@ -167,23 +165,33 @@ class SymbolicEmu:
 
     def _update_flags(self, value, flags):
         for flag in flags:
-            if flag == '$c7':
-                self.regs[flag] = self.names['cf']
+            if flag == '$b4':
+                self.regs[flag] = self.names[flag]
+            elif flag == '$b8':
+                self.regs[flag] = self.names[flag]
+            elif flag == '$b16':
+                self.regs[flag] = self.names[flag]
+            elif flag == '$b32':
+                self.regs[flag] = self.names[flag]
+            elif flag == '$c3':
+                self.regs[flag] = self.names[flag]
+            elif flag == '$c7':
+                self.regs[flag] = self.names[flag]
             elif flag == '$c15':
-                self.regs[flag] = self.names['cf']
+                self.regs[flag] = self.names[flag]
             elif flag == '$c31':
-                self.regs[flag] = self.names['cf']
+                self.regs[flag] = self.names[flag]
             elif flag == '$p':
-                self.regs[flag] = self.names['pf']
+                self.regs[flag] = self.names[flag]
             elif flag == '$z':
-                self.regs[flag] = sympify(0) if value == 0 else self.names['zf']
+                self.regs[flag] = sympify(0) if value == 0 else self.names[flag]
             elif flag == '$s':
-                self.regs[flag] = self.names['sf']
+                self.regs[flag] = self.names[flag]
             elif flag == '$o':
-                self.regs[flag] = self.names['of']
+                self.regs[flag] = self.names[flag]
 
-    def step(self, instrs):
-        instr_stack = []
+    def step(self, instrs, instr_stack=None):
+        instr_stack = instr_stack or []
         condition = 1
         for instr in instrs.split(','):
             if condition == 0:
@@ -204,33 +212,52 @@ class SymbolicEmu:
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
                 self.regs[reg] = val
                 self._propagate_affected(reg)
-            elif instr == '+=':
-                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
-                self.regs[reg] = self.regs[reg] + val
-                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
-                self._propagate_affected(reg)
-            elif instr == '++=':
-                reg = instr_stack.pop()
-                self.regs[reg] = self.regs[reg] + 1
-                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
-                self._propagate_affected(reg)
-            elif instr == '-=':
-                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
-                self.regs[reg] = self.regs[reg] - val
-                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
-                self._propagate_affected(reg)
-            elif instr == '--=':
-                reg, val = instr_stack.pop()
-                self.regs[reg] = self.regs[reg] - 1
-                self._update_flags(self.regs[reg], ['$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
-            elif instr == '^=':
-                reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
-                self.regs[reg] = sympify(0) if self.regs[reg] == val else self.names[reg]
-                self._update_flags(self.regs[reg], ['$p', '$z', '$s'])
-                self._propagate_affected(reg)
+            elif instr == '!':
+                val = self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(1 - val if val.is_Integer else self.names['not'])
+            elif instr == '++':
+                val = self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(val + 1)
+                self._update_flags(instr_stack[-1], ['$p', '$z', '$s', '$o'])
+            elif instr == '--':
+                val = self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(val - 1)
+                self._update_flags(instr_stack[-1], ['$p', '$z', '$s', '$o'])
+            elif instr == '==':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(self.names['eq'])
+                self._update_flags(instr_stack[-1], ['$b4', '$b8', '$b16', '$b32', '$p', '$s', '$o'])
+            elif instr == '|':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(self.names['or'])
+                self._update_flags(instr_stack[-1], ['$p', '$z', '$s'])
+            elif instr == '&':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(self.names['and'])
+                self._update_flags(instr_stack[-1], ['$p', '$z', '$s'])
+            elif instr == '^':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(sympify(0) if val_1 == val_2 else self.names['xor'])
+                self._update_flags(instr_stack[-1], ['$p', '$z', '$s'])
+            elif instr == '+':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(val_1 + val_2)
+                self._update_flags(instr_stack[-1], ['$c3', '$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
+            elif instr == '-':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(val_1 - val_2)
+                self._update_flags(instr_stack[-1], ['$b4', '$b8', '$b16', '$b32', '$p', '$z', '$s', '$o'])
+            elif instr == '*':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                instr_stack.append(val_1 * val_2)
+            elif instr in ('++=', '--=', '&=', '|=', '^=', '+=', '-=', '*='):
+                reg = instr_stack[-1]
+                self.step(instr[:-1], instr_stack)
+                instr_stack.append(reg)
+                self.step('=', instr_stack)
             elif instr.startswith('=['):
                 addr, val = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                size = int(instr[2:-1])
+                size = int(instr[2:-1] or '4')
                 var, offset = self._conv_mem_access(addr)
                 if var not in (self.mem_var, Symbol('esp_0')):
                     self.mem_var = var

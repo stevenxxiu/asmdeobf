@@ -40,11 +40,11 @@ def main():
         r.cmd('e io.cache=true')
 
         # process funcs
-        funcs, constraint = FuncsExtract(r).extract_funcs(0x00401BB4, ConstConstraint(), end_addrs=(0x00401D6C,))
-        funcs, constraint = FuncsExtract(r).extract_funcs(0x00401D6C, constraint, end_addrs=(0x00401D77,))
+        funcs = FuncsExtract(r).extract_funcs(0x00401BB4, ConstConstraint(is_oep=True), end_addrs=(0x00401D6C,))
+        funcs = FuncsExtract(r).extract_funcs(0x00401D6C, funcs[0x00401BB4][1], end_addrs=(0x00401D77,))
         process_funcs(funcs)
-        funcs, constraint = FuncsExtract(r).extract_funcs(0x00401D77, constraint, end_addrs=(0x00401DC7,))
-        funcs, constraint = FuncsExtract(r).extract_funcs(0x00401D77, constraint, end_addrs=(0x00401E73,))
+        funcs = FuncsExtract(r).extract_funcs(0x00401D77, funcs[0x00401D6C][1], end_addrs=(0x00401DC7,))
+        funcs = FuncsExtract(r).extract_funcs(0x00401DC7, funcs[0x00401D77][1], end_addrs=(0x00401E73,))
         process_funcs(funcs)
 
     finally:

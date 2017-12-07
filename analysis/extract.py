@@ -55,7 +55,7 @@ class FuncExtract:
 
         while True:
             cur_addr = state.regs['eip']
-            if not cur_addr.is_Integer:
+            if not cur_addr.is_Integer or cur_addr in self.end_addrs:
                 constraint = ConstConstraint(state)
                 if self.end_constraint is None:
                     self.end_constraint = constraint
@@ -96,10 +96,6 @@ class FuncExtract:
             # append instruction
             instr = self.extract_esil(cur_addr)
             self.block_append_instr(block, cur_addr, instr)
-
-            # check if ended by user action
-            if cur_addr in self.end_addrs:
-                break
 
             # check if we have a conditional jmp
             matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
@@ -161,4 +157,4 @@ class FuncsExtract:
     def extract_funcs(self, addr, constraint, end_addrs=()):
         funcs = {}
         FuncExtract(self.r, addr, funcs, constraint, end_addrs).extract()
-        return sorted(funcs.values())
+        return funcs

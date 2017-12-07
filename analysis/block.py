@@ -61,9 +61,7 @@ def esil_to_sa(instrs):
             # write to memory
             dest = instr_stack.pop()
             src = instr_stack.pop()
-            size = instr[2:-1]
-            if not size and src == 'eip':
-                size = 4
+            size = instr[2:-1] or '4'
             instrs_new.append((dest, f'[{size}]=', src))
         elif instr in ('+=', '-=', '*=', '/=', '&=', '^='):
             dest = instr_stack.pop()

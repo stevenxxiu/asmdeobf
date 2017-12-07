@@ -60,8 +60,8 @@ with description('ExtractFuncs'):
             esp,[4],eip,=,4,esp,+=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,eax,4,esp,-=,esp,=[4]',
                 '102,eip,=,esp,[4],eip,=,4,esp,+=',
@@ -74,8 +74,8 @@ with description('ExtractFuncs'):
             esp,[4],eip,=,4,esp,+=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,102,4,esp,-=,esp,=[4]',
                 '102,eip,=,esp,[4],eip,=,4,esp,+=',
@@ -91,8 +91,8 @@ with description('ExtractFuncs'):
             101,eip,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,0,eax,=',
             ], [101]),
@@ -111,8 +111,8 @@ with description('ExtractFuncs'):
             zf,?{,101,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,0,eax,=',
             ], [101]),
@@ -133,8 +133,8 @@ with description('ExtractFuncs'):
             1,eax,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,eax,eax,^=,$z,zf,=',
                 '102,eip,=,zf,?{,200,eip,=,}',
@@ -151,8 +151,8 @@ with description('ExtractFuncs'):
             101,eip,=
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,eax,eax,^=,$z,zf,=',
             ], [101]),
@@ -174,8 +174,8 @@ with description('ExtractFuncs'):
             zf,?{,200,eip,=,}
             esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
-        funcs = FuncsExtract(r).extract_funcs(100, ConstConstraint())[0]
-        expect(funcs[0].blocks).to(equal({
+        func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
+        expect(func.blocks).to(equal({
             100: Block([
                 '101,eip,=,zf,?{,102,eip,=,}',
             ], [102, 101], ('zf', 0)),
