@@ -182,7 +182,13 @@ class SymbolicEmu:
             elif instr == '$p':
                 instr_stack.append(self.names[instr])
             elif instr == '$z':
-                instr_stack.append(sympify(1) if self.flag_val == 0 else self.names[instr])
+                if self.flag_val.is_Integer:
+                    val = sympify(int(self.flag_val == 0))
+                elif self._conv_mem_access(self.flag_val)[0] == Symbol('esp_0'):
+                    val = sympify(0)
+                else:
+                    val = self.names[instr]
+                instr_stack.append(val)
             elif instr == '$s':
                 instr_stack.append(self.names[instr])
             elif instr == '$o':
@@ -222,15 +228,29 @@ class SymbolicEmu:
                 instr_stack.append(self.names['eq'])
             elif instr == '&':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                self.flag_val = self.names['and']
+                if val_1.is_Integer and val_2.is_Integer:
+                    val = sympify(int(val_1) & int(val_2))
+                else:
+                    val = self.names['and']
+                self.flag_val = val
                 instr_stack.append(self.flag_val)
             elif instr == '|':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                self.flag_val = self.names['or']
+                if val_1.is_Integer and val_2.is_Integer:
+                    val = sympify(int(val_1) | int(val_2))
+                else:
+                    val = self.names['or']
+                self.flag_val = val
                 instr_stack.append(self.flag_val)
             elif instr == '^':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                self.flag_val = sympify(0) if val_1 == val_2 else self.names['xor']
+                if val_1 == val_2:
+                    val = sympify(0)
+                elif val_1.is_Integer and val_2.is_Integer:
+                    val = sympify(int(val_1) ^ int(val_2))
+                else:
+                    val = self.names['xor']
+                self.flag_val = val
                 instr_stack.append(self.flag_val)
             elif instr == '+':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())

@@ -41,10 +41,18 @@ with description('SymbolicEmu'):
             self.emu.step('$c7,cf,=')
             expect(self.emu.regs['cf']).to(equal(1))
 
-        with it('sets $zf to 1 when register is 0'):
+        with it('sets $zf to 1 when register is 0 on integer'):
             self.emu.flag_val = sympify(0)
             self.emu.step('$z,zf,=')
             expect(self.emu.regs['zf']).to(equal(1))
+            self.emu.flag_val = sympify(1)
+            self.emu.step('$z,zf,=')
+            expect(self.emu.regs['zf']).to(equal(0))
+
+        with it('sets $zf to 0 when value involves `esp_0 + const`'):
+            self.emu.flag_val = Symbol('esp_0') + 1
+            self.emu.step('$z,zf,=')
+            expect(self.emu.regs['zf']).to(equal(0))
 
     with context('assign'):
         with it('mods integer values'):
@@ -76,7 +84,24 @@ with description('SymbolicEmu'):
             self.emu.step('eax,++=')
             expect(self.emu.regs['eax']).to(equal(Symbol('eax_0') + 1))
 
+    with context('and'):
+        with it('ands integer registers'):
+            self.emu.step('0x12,eax,=')
+            self.emu.step('0x34,eax,&=')
+            expect(self.emu.regs['eax']).to(equal(0x10))
+
+    with context('or'):
+        with it('ors integer registers'):
+            self.emu.step('0x12,eax,=')
+            self.emu.step('0x34,eax,|=')
+            expect(self.emu.regs['eax']).to(equal(0x36))
+
     with context('xor'):
+        with it('xors integer registers'):
+            self.emu.step('0x12,eax,=')
+            self.emu.step('0x34,eax,^=')
+            expect(self.emu.regs['eax']).to(equal(0x26))
+
         with it('clears register when xoring with same value'):
             self.emu.step('eax,eax,^=')
             expect(self.emu.regs['eax']).to(equal(0))
