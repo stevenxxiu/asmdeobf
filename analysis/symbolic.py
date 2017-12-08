@@ -57,6 +57,7 @@ class ConstConstraint:
         return False
 
     def widen(self, src):
+        # XXX stack & mem widen are wrong, need to find all overlaps
         for dest, src in (self.regs, src.regs), (self.stack, src.stack), (self.mem, src.mem):
             for name, val in src.items():
                 if val is None:

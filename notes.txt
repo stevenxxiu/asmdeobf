@@ -10,8 +10,24 @@ To extract a CFG, we first need to identify conditional branches. Conditional br
 
 So this becomes abstract intrepretation. In order to update initial conditions properly, we re-execute new blocks if the initial conditions have not yet reached a fixed-point. In order to save time, we use BFS so both branches of a conditional are run first before the remaining code is run.
 
+In order to handle jge/jle, and fixed locations in stack/memory, our constraint involves constants with disjunctions, where `esp_0 + const` is also considered a constant.
+
+## Expression manipulations which hinder abstract interpretation
+It is possible where are some cases where there are expressions like `eax_0 + eax_1 - eax_1 - eax_0`. This can hinder constant analysis.
+
+In this case, we may be tempted to use symbolic execution rather than block simplification for performance reasons. To be complete, we need to implement all operations symbolically, then evaluate constraints at the end of the block. But this has some disadvantages:
+
+- The expressions may be large, even if some sub-expressions are the same variable, this may be expensive.
+- Coding new simplifications duplicates work from block simplification.
+- If there is a need for coding constraint-based block simplification (e.g. range constraints making some parts 0 to allow for further transforms), then there is probably also a need for constraint-based expression simplification, which duplicates work.
+- The symbolic evaluator restricts how the stack/memory is implemented (e.g. that they are separated), instead of leaving this up to the constraint class.
+
+A mitigation to the performance problem is to instead perform block simplification every time there is an unknown predicate, which should not occur often.
+
+## Calls
 Calls also split a block in two to facilitate block-by-block deobfuscation.
 
+## Identifying functions
 In order to identify functions, we look at calls which have relatively large offsets (>=10). Some functions are useless, so we allow inlining. Simply ignoring these calls is not the same as inlining, since the analyzer might see them again and move them into a separate block, which hinders de-obfuscation within the same block.
 
 # De-obfuscation after the CFG is extracted
