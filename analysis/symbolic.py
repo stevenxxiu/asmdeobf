@@ -31,13 +31,19 @@ class ConstConstraint:
     @staticmethod
     def from_state(state):
         self = ConstConstraint()
-        for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
-            for name, val in other.items():
-                this[name] = val if self._is_constant(val) else None
+        for dest, src in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
+            for name, val in src.items():
+                dest[name] = val if self._is_constant(val) else None
         return self
 
     @staticmethod
     def from_predicate(predicate):
+        pass
+
+    def update(self, dest, name, value):
+        pass
+
+    def simplify_value(self, value):
         pass
 
     @staticmethod
@@ -50,18 +56,18 @@ class ConstConstraint:
             return True
         return False
 
-    def widen(self, other):
-        for this, other in (self.regs, other.regs), (self.stack, other.stack), (self.mem, other.mem):
-            for name, val in other.items():
+    def widen(self, src):
+        for dest, src in (self.regs, src.regs), (self.stack, src.stack), (self.mem, src.mem):
+            for name, val in src.items():
                 if val is None:
-                    this[name] = None
+                    dest[name] = None
 
     def to_state(self, names):
         state = SymbolicEmu(names)
-        for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
-            for name, val in this.items():
+        for dest, src in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
+            for name, val in dest.items():
                 if val is not None:
-                    other[name] = val
+                    src[name] = val
         return state
 
 
