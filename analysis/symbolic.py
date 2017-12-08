@@ -13,20 +13,32 @@ class ConstConstraint:
     oep is assumed if `state is None`.
     '''
 
-    def __init__(self, state=None, is_oep=False):
+    def __init__(self):
         self.regs = {name: None for name in SymbolicEmu.bits}
         self.stack = {}
         self.mem = {}
-        if state:
-            for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
-                for name, val in other.items():
-                    this[name] = val if self._is_constant(val) else None
-        if is_oep:
-            for name, val in {'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'of': 0}.items():
-                self.regs[name] = sympify(val)
 
     def __eq__(self, other):
         return self.regs == other.regs and self.stack == other.stack and self.mem == other.mem
+
+    @staticmethod
+    def from_oep():
+        self = ConstConstraint()
+        for name, val in {'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'of': 0}.items():
+            self.regs[name] = sympify(val)
+        return self
+
+    @staticmethod
+    def from_state(state):
+        self = ConstConstraint()
+        for this, other in (self.regs, state.regs), (self.stack, state.stack.values), (self.mem, state.mem.values):
+            for name, val in other.items():
+                this[name] = val if self._is_constant(val) else None
+        return self
+
+    @staticmethod
+    def from_predicate(predicate):
+        pass
 
     @staticmethod
     def _is_constant(val):

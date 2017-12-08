@@ -1,4 +1,9 @@
 
+- more generic symbolic emu and constraints:
+    in constant constraints allow logical or of constraints by e.g. (of, sf): (1, 1)
+    define new operands for and, or, not so we can evaluate these constraints
+    the symbolic emu should ask the constraints instead at the end of every expression to simplify the state and update the constaints if possible, so from_state() is no longer needed
+    the symbolic emu should take constraints as an argument
 - run main.py to see what is still broken, and simplify cfg which has same blocks of instructions
 - Allow manually specifying functions to be inlined. This is necessary in order to prevent duplicate code blocks from being run.
 - To better locate where blocks are and what we have missing do coverage in js (draw as canvas)

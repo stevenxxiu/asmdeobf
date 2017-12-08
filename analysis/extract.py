@@ -56,7 +56,7 @@ class FuncExtract:
         while True:
             cur_addr = state.regs['eip']
             if not cur_addr.is_Integer or cur_addr in self.end_addrs:
-                constraint = ConstConstraint(state)
+                constraint = ConstConstraint.from_state(state)
                 if self.end_constraint is None:
                     self.end_constraint = constraint
                 else:
@@ -68,7 +68,7 @@ class FuncExtract:
             if cur_addr in self.addr_to_block:
                 block.children = [cur_addr]
                 block, i = self.addr_to_block[cur_addr]
-                constraint = ConstConstraint(state)
+                constraint = ConstConstraint.from_state(state)
                 prev_constraint = self.addr_to_constraint[self.block_to_addr[(id(block), 0)]]
                 if i == 0:
                     constraint.widen(prev_constraint)
@@ -104,10 +104,10 @@ class FuncExtract:
                 if not state.regs[flag].is_Integer:
                     is_negated = bool(matches.group(3))
                     # explore remaining code first before exploring jmp
-                    constraint = ConstConstraint(state)
+                    constraint = ConstConstraint.from_state(state)
                     constraint.regs[flag] = sympify(int(not is_negated))
                     self.stack_append(int(matches.group(4)), constraint)
-                    constraint = ConstConstraint(state)
+                    constraint = ConstConstraint.from_state(state)
                     constraint.regs[flag] = sympify(int(is_negated))
                     self.stack_append(int(matches.group(1)), constraint)
                     block.condition = (flag, int(is_negated))
