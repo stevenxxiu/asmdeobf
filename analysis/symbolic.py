@@ -1,5 +1,4 @@
 from collections import defaultdict
-from copy import deepcopy
 
 from sympy import Symbol, sympify
 
@@ -105,12 +104,11 @@ class SymbolicEmu:
         'di': 16, 'edi': 32,
         'eip': 32,
         'cf': 1, 'pf': 1, 'af': 1, 'zf': 1, 'sf': 1, 'tf': 1, 'df': 1, 'of': 1,
-        '$b4': 1, '$b8': 1, '$b32': 1, '$c7': 1, '$c15': 1, '$c31': 1, '$p': 1, '$z': 1, '$s': 1, '$o': 1,
     }
 
     def __init__(self, names):
         self.names = names
-        self.affected = {
+        self.affect_super = {
             'al': {'ax': (0, 7)}, 'ah': {'ax': (8, 15)}, 'ax': {'eax': (0, 15)},
             'cl': {'cx': (0, 7)}, 'ch': {'cx': (8, 15)}, 'cx': {'ecx': (0, 15)},
             'dl': {'dx': (0, 7)}, 'dh': {'dx': (8, 15)}, 'dx': {'edx': (0, 15)},
@@ -120,32 +118,24 @@ class SymbolicEmu:
             'si': {'esi': (0, 15)},
             'di': {'edi': (0, 15)},
         }
-        for reg, parents in self.affected.items():
+        for reg, parents in self.affect_super.items():
             ancestor, bits = next(iter(parents.items()))
             cur_start = bits[0]
-            while ancestor in self.affected:
-                ancestor, bits = next(iter(self.affected[ancestor].items()))
+            while ancestor in self.affect_super:
+                ancestor, bits = next(iter(self.affect_super[ancestor].items()))
                 cur_start += bits[0]
                 parents[ancestor] = (cur_start, cur_start + self.bits[reg] - 1)
-        for reg, parents in deepcopy(self.affected).items():
-            for parent in parents:
-                if parent not in self.affected:
-                    self.affected[parent] = {}
-                self.affected[parent][reg] = (0, self.bits[reg] - 1)
+        self.affect_sub = {}
+        for reg, parents in self.affect_super.items():
+            for parent, bits in parents.items():
+                if parent not in self.affect_sub:
+                    self.affect_sub[parent] = {}
+                self.affect_sub[parent][reg] = bits
         self.regs = {reg: self.names[reg] for reg in self.bits}
+        self.flag_val = 0  # for computing flags
         self.mem_var = 0
         self.mem = MemValues(self.names)
         self.stack = MemValues(self.names)
-
-    def _propagate_affected(self, reg):
-        for parent, bits in self.affected.get(reg, {}).items():
-            if self.regs[parent].is_Integer and self.regs[reg].is_Integer:
-                parent_val = int(self.regs[parent])
-                reg_val = int(self.regs[reg])
-                mask = ((1 << (bits[1] - bits[0] + 1)) - 1) << bits[0]
-                self.regs[parent] = sympify((parent_val & ~mask) | (reg_val << bits[0]))
-            else:
-                self.regs[parent] = self.names[parent]
 
     def _conv_instr_val(self, val):
         return self.regs[val] if val in self.regs else sympify(val)
@@ -163,35 +153,8 @@ class SymbolicEmu:
             return addr.args[1], addr.args[0]
         return None, None
 
-    def _update_flags(self, value, flags):
-        for flag in flags:
-            if flag == '$b4':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$b8':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$b16':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$b32':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$c3':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$c7':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$c15':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$c31':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$p':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$z':
-                self.regs[flag] = sympify(0) if value == 0 else self.names[flag]
-            elif flag == '$s':
-                self.regs[flag] = self.names[flag]
-            elif flag == '$o':
-                self.regs[flag] = self.names[flag]
-
     def step(self, instrs, instr_stack=None):
-        instr_stack = instr_stack or []
+        instr_stack = [] if instr_stack is None else instr_stack
         condition = 1
         for instr in instrs.split(','):
             if condition == 0:
@@ -208,45 +171,75 @@ class SymbolicEmu:
                 instr_stack.append(0)
             elif instr == '$1':
                 instr_stack.append(1)
+            elif instr.startswith('$b'):
+                bit = int(instr[2:])
+                instr_stack.append(sympify(
+                    int(bool(int(self.flag_val) & (1 << bit)))
+                ) if self.flag_val.is_Integer else self.names[instr])
+            elif instr.startswith('$c'):
+                bit = int(instr[2:]) + 1
+                self.step(f'$b{bit}', instr_stack)
+            elif instr == '$p':
+                instr_stack.append(self.names[instr])
+            elif instr == '$z':
+                instr_stack.append(sympify(1) if self.flag_val == 0 else self.names[instr])
+            elif instr == '$s':
+                instr_stack.append(self.names[instr])
+            elif instr == '$o':
+                instr_stack.append(self.names[instr])
             elif instr == '=':
                 reg, val = instr_stack.pop(), self._conv_instr_val(instr_stack.pop())
+                if val.is_Integer:
+                    val = val % (1 << self.bits[reg])
                 self.regs[reg] = val
-                self._propagate_affected(reg)
+                for parent, bits in self.affect_super.get(reg, {}).items():
+                    if val.is_Integer and self.regs[parent].is_Integer:
+                        parent_val = int(self.regs[parent])
+                        mask = ((1 << (bits[1] - bits[0] + 1)) - 1) << bits[0]
+                        self.regs[parent] = sympify((parent_val & ~mask) | (int(val) << bits[0]))
+                    else:
+                        self.regs[parent] = self.names[parent]
+                for child, bits in self.affect_sub.get(reg, {}).items():
+                    if val.is_Integer:
+                        mask = ((1 << (bits[1] - bits[0] + 1)) - 1) << bits[0]
+                        self.regs[child] = sympify((int(val) & mask) >> bits[0])
+                    else:
+                        self.regs[child] = self.names[child]
             elif instr == '!':
                 val = self._conv_instr_val(instr_stack.pop())
                 instr_stack.append(1 - val if val.is_Integer else self.names['not'])
             elif instr == '++':
                 val = self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(val + 1)
-                self._update_flags(instr_stack[-1], ['$p', '$z', '$s', '$o'])
+                self.flag_val = val + 1
+                instr_stack.append(self.flag_val)
             elif instr == '--':
                 val = self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(val - 1)
-                self._update_flags(instr_stack[-1], ['$p', '$z', '$s', '$o'])
+                self.flag_val = val - 1
+                instr_stack.append(self.flag_val)
             elif instr == '==':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                self.flag_val = val_1 - val_2
                 instr_stack.append(self.names['eq'])
-                self._update_flags(instr_stack[-1], ['$b4', '$b8', '$b16', '$b32', '$p', '$s', '$o'])
-            elif instr == '|':
-                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(self.names['or'])
-                self._update_flags(instr_stack[-1], ['$p', '$z', '$s'])
             elif instr == '&':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(self.names['and'])
-                self._update_flags(instr_stack[-1], ['$p', '$z', '$s'])
+                self.flag_val = self.names['and']
+                instr_stack.append(self.flag_val)
+            elif instr == '|':
+                val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
+                self.flag_val = self.names['or']
+                instr_stack.append(self.flag_val)
             elif instr == '^':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(sympify(0) if val_1 == val_2 else self.names['xor'])
-                self._update_flags(instr_stack[-1], ['$p', '$z', '$s'])
+                self.flag_val = sympify(0) if val_1 == val_2 else self.names['xor']
+                instr_stack.append(self.flag_val)
             elif instr == '+':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(val_1 + val_2)
-                self._update_flags(instr_stack[-1], ['$c3', '$c7', '$c15', '$c31', '$p', '$z', '$s', '$o'])
+                self.flag_val = val_1 + val_2
+                instr_stack.append(self.flag_val)
             elif instr == '-':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
-                instr_stack.append(val_1 - val_2)
-                self._update_flags(instr_stack[-1], ['$b4', '$b8', '$b16', '$b32', '$p', '$z', '$s', '$o'])
+                self.flag_val = val_1 - val_2
+                instr_stack.append(self.flag_val)
             elif instr == '*':
                 val_1, val_2 = self._conv_instr_val(instr_stack.pop()), self._conv_instr_val(instr_stack.pop())
                 instr_stack.append(val_1 * val_2)

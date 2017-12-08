@@ -90,7 +90,7 @@ def sa_include_flag_deps(instrs):
     while i < len(instrs):
         # append flag instructions first to avoid modification of register involved in computation of flag
         non_flag_instr = instrs[i]
-        while i < len(instrs) - 1 and instrs[i + 1][0] in (
+        while i + 1 < len(instrs) and instrs[i + 1][0] in (
             'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of'
         ):
             if isinstance(instrs[i + 1][2], int):
