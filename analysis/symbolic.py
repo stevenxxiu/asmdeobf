@@ -40,12 +40,6 @@ class ConstConstraint:
     def from_predicate(predicate):
         pass
 
-    def update(self, dest, name, value):
-        pass
-
-    def simplify_value(self, value):
-        pass
-
     @staticmethod
     def _is_constant(val):
         if val.is_Integer:

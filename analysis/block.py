@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+import itertools
+
 from analysis.symbolic import MemValues
 
 __all__ = ['Block', 'simplify_block', 'sa_pprint']
@@ -57,6 +59,11 @@ def esil_to_sa(instrs):
             instr_stack.append(instr)
         elif instr == '=':
             instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
+        elif instr in ('[1]', '[2]', '[4]'):
+            # read from memory
+            instrs_new.append((f'tmp_{tmp_num}', f'={instr}', instr_stack.pop()))
+            instr_stack.append(f'tmp_{tmp_num}')
+            tmp_num += 1
         elif instr.startswith('=['):
             # write to memory
             dest = instr_stack.pop()
@@ -71,11 +78,6 @@ def esil_to_sa(instrs):
             instrs_new.append((f'tmp_{tmp_num}', '=', instr, instr_stack.pop(), instr_stack.pop()))
             instr_stack.append(f'tmp_{tmp_num}')
             tmp_num += 1
-        elif instr in ('[1]', '[2]', '[4]'):
-            # read from memory
-            instrs_new.append((f'tmp_{tmp_num}', f'={instr}', instr_stack.pop()))
-            instr_stack.append(f'tmp_{tmp_num}')
-            tmp_num += 1
         else:
             raise ValueError('instr', instr)
     return instrs_new
@@ -85,21 +87,16 @@ def sa_include_flag_deps(instrs):
     '''
     Include all register dependencies for flags.
     '''
-    instrs_new = []
-    i = 0
-    while i < len(instrs):
-        # append flag instructions first to avoid modification of register involved in computation of flag
-        non_flag_instr = instrs[i]
-        while i + 1 < len(instrs) and instrs[i + 1][0] in (
-            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of'
-        ):
-            if isinstance(instrs[i + 1][2], int):
-                instrs_new.append(instrs[i + 1])
-            else:
-                instrs_new.append(instrs[i + 1] + non_flag_instr[2:])
-            i += 1
-        instrs_new.append(non_flag_instr)
-        i += 1
+    instrs_new = instrs[:1]
+    flags = ('cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of')
+    for prev_instr, instr in zip(instrs[:-1], instrs[1:]):
+        if instr[0] in flags:
+            if prev_instr[0] not in flags:
+                instrs_new.pop()
+                instrs_new.append(('tmp', '=') + prev_instr[2:])
+                instrs_new.append(prev_instr[:2] + ('tmp',))
+            instr = instr + ('tmp',)
+        instrs_new.append(instr)
     return instrs_new
 
 
@@ -134,20 +131,44 @@ def sa_to_ssa(instrs):
     Convert to ssa form.
     '''
     instrs_new = []
+    var_map = {}
     var_num = defaultdict(int)
     for instr in instrs:
-        parts_new = [instr[0], instr[1]]
-        for part in instr[2:]:
-            if is_var(part) and not part.startswith('tmp'):
-                parts_new.append(f'{part}_{var_num[part]}')
-            else:
-                parts_new.append(part)
-        part = instr[0]
-        if is_var(part) and not part.startswith('tmp'):
-            if not instr[1].endswith(']='):
-                var_num[part] += 1
-            parts_new[0] = f'{part}_{var_num[part]}'
-        instrs_new.append(tuple(parts_new))
+        instr_new = list(instr)
+        for i in list(range(2, len(instr))) + [0]:
+            instr_part = instr[i]
+            if is_var(instr_part):
+                is_assign = i == 0 and not instr[1].endswith(']=')
+                if is_assign or instr_part not in var_map:
+                    name_part = instr_part.split('_')[0]
+                    if is_assign:
+                        var_num[name_part] += 1
+                    var_map[instr_part] = f'{name_part}_{var_num[name_part]}'
+                instr_part = var_map[instr_part]
+            instr_new[i] = instr_part
+        instrs_new.append(tuple(instr_new))
+    return instrs_new
+
+
+def ssa_to_sa(instrs):
+    '''
+    Convert back to sa form.
+    '''
+    instrs = sa_to_ssa(instrs)
+    instrs_new = []
+    init_vars = {}
+    for instr in instrs:
+        for part in instr:
+            if part.endswith('_0'):
+                init_vars[part.split('_')[0]] = part
+    final_vars = {}
+    for instr in instrs:
+        if not instr[1].endswith(']='):
+            if not instr[0].startswith('tmp_'):
+                final_vars[instr[0].split('_')[0]] = instr[0]
+    var_map = {name: name_part for name_part, name in itertools.chain(init_vars.items(), final_vars.items())}
+    for instr in instrs:
+        instrs_new.append(tuple(var_map.get(part, part) for part in instr))
     return instrs_new
 
 
@@ -345,36 +366,6 @@ def sa_dead_code_elim(instrs, useful_regs):
     return instrs_new
 
 
-def ssa_to_sa(instrs, final_vars):
-    '''
-    Convert back to sa form (i.e. initial and final registers the same).
-    '''
-    instrs_new = []
-    final_vars_used = {}
-    for instr in instrs:
-        if instr[1] in ('=', 'x='):
-            name = instr[0].split('_')[0]
-            if name in final_vars:
-                final_vars_used[name] = instr[0]
-    var_map = {}
-    for var, last_var in final_vars_used.items():
-        var_map[f'{var}_0'] = var
-        var_map[last_var] = var
-    var_num = defaultdict(int)
-    for instr in instrs:
-        parts = []
-        for part in instr:
-            if is_var(part):
-                name = part.split('_')[0]
-                if part not in var_map:
-                    var_map[part] = f'{name}_{var_num[name]}'
-                    var_num[name] += 1
-                part = var_map[part]
-            parts.append(part)
-        instrs_new.append(parts)
-    return instrs_new
-
-
 def sa_pprint(instrs):
     instrs_new = []
     for instr in instrs:
@@ -416,5 +407,5 @@ def simplify_block(block):
         instrs = sa_dead_code_elim(instrs, final_vars)
         if len(instrs) == prev_len:
             break
-    instrs = ssa_to_sa(instrs, final_vars)
+    instrs = ssa_to_sa(instrs)
     block.instrs = instrs
