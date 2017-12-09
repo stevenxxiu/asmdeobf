@@ -1,8 +1,8 @@
 from expects import *
 
 from analysis.block import (
-    esil_to_sa, sa_expr_simp, sa_include_flag_deps, sa_include_subword_deps, sa_mem_elim, sa_to_ssa,
-    ssa_to_sa)
+    esil_to_sa, sa_expr_simp, sa_include_flag_deps, sa_include_subword_deps, sa_mem_elim, sa_to_ssa, ssa_to_sa
+)
 from analysis.specs._stub import *
 
 with description('esil_to_sa'):

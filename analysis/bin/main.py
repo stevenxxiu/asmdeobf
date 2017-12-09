@@ -1,9 +1,9 @@
 import r2pipe
 
 from analysis.block import sa_pprint, simplify_block
+from analysis.constraint import ConstConstraint
 from analysis.extract import FuncsExtract
 from analysis.func import simplify_func
-from analysis.symbolic import ConstConstraint
 
 
 def process_funcs(funcs):

@@ -1,8 +1,7 @@
+import itertools
 from collections import defaultdict
 
-import itertools
-
-from analysis.symbolic import MemValues
+from analysis.utils import MemValues, is_var
 
 __all__ = ['Block', 'simplify_block', 'sa_pprint']
 
@@ -17,10 +16,6 @@ class Block:
         if isinstance(self, other.__class__):
             return self.__dict__ == other.__dict__
         return False
-
-
-def is_var(name):
-    return isinstance(name, str) and str.isidentifier(name)
 
 
 def esil_to_sa(instrs):
@@ -289,7 +284,7 @@ def sa_mem_elim(instrs):
     instrs_new = []
     var_map = {}  # maps `r2` to `(r1, 5)` if we have `r2 = r1 + 5`
     mem_var = 0  # current var memory values are based upon
-    mem_values = MemValues({'mem': None})
+    mem_values = MemValues()
     mem_instrs = defaultdict(dict)  # {(var_, offset, size): instr_i}, eliminates dead writes
     dead_instrs = set()
     for i, instr in enumerate(instrs):

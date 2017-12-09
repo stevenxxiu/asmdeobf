@@ -1,5 +1,6 @@
 
 - Get rid of dependency of sympy and use abstract interpretation only for now as outlined in notes
+- Some instructions need if/else statements and even whiles, so we should instead have a class that turns esil into a cfg (have a cfg class), and step based on that, also given this constraints should be fed input as a block (to evaluate simplify so that only the condition variables matter)
 - run main.py to see what is still broken, and simplify cfg which has same blocks of instructions
 - Allow manually specifying functions to be inlined. This is necessary in order to prevent duplicate code blocks from being run.
 - To better locate where blocks are and what we have missing do coverage in js (draw as canvas)

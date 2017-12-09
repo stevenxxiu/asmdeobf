@@ -3,8 +3,8 @@ import re
 from sympy import Symbol, sympify
 
 from analysis.block import Block
+from analysis.constraint import ConstConstraint
 from analysis.func import Function
-from analysis.symbolic import ConstConstraint, SymbolNames
 
 
 class FuncExtract:
@@ -19,7 +19,6 @@ class FuncExtract:
         self.addr_to_constraint = {}  # {addr: constraint}
         self.addr_to_block = {}  # {addr: (block, i)}
         self.block_to_addr = {}  # {(block, i): addr}
-        self.names = SymbolNames()
         self.stack = []  # [(addr, state)]
         self.esp_0 = None
 
