@@ -16,7 +16,7 @@ with description('ConstConstraint'):
             'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'tf': 0, 'df': 0, 'of': 0,
         }))
 
-    with context('__eq__'):
+    with description('__eq__'):
         with before.each:
             self.c1 = ConstConstraint()
             self.c2 = ConstConstraint()
@@ -41,7 +41,7 @@ with description('ConstConstraint'):
             self.c1.mem_var = 'eax'
             expect(self.c1).not_to(equal(self.c2))
 
-    with context('widen'):
+    with description('widen'):
         with before.each:
             self.c1 = ConstConstraint()
             self.c2 = ConstConstraint()
@@ -67,11 +67,11 @@ with description('ConstConstraint'):
             self.c1.widen(self.c2)
             expect(self.c1.mem.values).to(equal({}))
 
-    with context('step'):
+    with description('step'):
         with before.each:
             self.c = ConstConstraint()
 
-        with context('op'):
+        with description('op'):
             with it('evals integer'):
                 self.c.step(('eax', '=', 1))
                 expect(self.c.vars['eax']).to(equal(1))
@@ -124,17 +124,17 @@ with description('ConstConstraint'):
                 self.c.step(('eax', '=', '!', 1))
                 expect(self.c.vars['eax']).to(equal(0))
 
-            with context('and'):
+            with description('and'):
                 with it('ands integer vars'):
                     self.c.step(('eax', '=', '&', 0x12, 0x34))
                     expect(self.c.vars['eax']).to(equal(0x10))
 
-            with context('or'):
+            with description('or'):
                 with it('ors integer vars'):
                     self.c.step(('eax', '=', '|', 0x12, 0x34))
                     expect(self.c.vars['eax']).to(equal(0x36))
 
-            with context('xor'):
+            with description('xor'):
                 with it('xors integer vars'):
                     self.c.step(('eax', '=', '^', 0x12, 0x34))
                     expect(self.c.vars['eax']).to(equal(0x26))
@@ -143,7 +143,7 @@ with description('ConstConstraint'):
                     self.c.step(('eax', '=', '^', 'eax', 'eax'))
                     expect(self.c.vars['eax']).to(equal(0))
 
-            with context('add'):
+            with description('add'):
                 with it('adds integer vars'):
                     self.c.step(('eax', '=', '+', 1, 2))
                     expect(self.c.vars['eax']).to(equal(3))
@@ -155,7 +155,7 @@ with description('ConstConstraint'):
                     self.c.step(('eax', '=', '+', 1, 'esp'))
                     expect(self.c.vars['eax']).to(equal(('esp_0', 1)))
 
-            with context('sub'):
+            with description('sub'):
                 with it('subs integer vars'):
                     self.c.step(('eax', '=', '-', 2, 1))
                     expect(self.c.vars['eax']).to(equal(1))
@@ -165,15 +165,15 @@ with description('ConstConstraint'):
                     self.c.step(('eax', '=', '-', 'esp', 1))
                     expect(self.c.vars['eax']).to(equal(('esp_0', 1)))
 
-            with context('mul'):
+            with description('mul'):
                 with it('muls integer vars'):
                     self.c.step(('eax', '=', '*', 2, 3))
                     expect(self.c.vars['eax']).to(equal(6))
 
-            with it('raises error on unknown op'):
+            with it('raises ValueError on unknown op'):
                 expect(lambda: self.c.step(('eax', '=', '??', 'ebx'))).to(raise_error(ValueError))
 
-        with context('assign'):
+        with description('assign'):
             with it('mods integer values if they are from registers'):
                 self.c.step(('al_0', '=', (1 << 8) + 1))
                 expect(self.c.vars['al_0']).to(equal(1))
@@ -191,7 +191,7 @@ with description('ConstConstraint'):
                 self.c.step(('eax', '=', 'ebx'))
                 expect(self.c.vars).to_not(have_key('eax'))
 
-        with context('assign to super-register'):
+        with description('assign to super-register'):
             with it('assigns when parent register and value are integers'):
                 self.c.vars['eax'] = 0xffffffff
                 self.c.step(('eax', 'l=', 1))
@@ -207,7 +207,7 @@ with description('ConstConstraint'):
                 self.c.step(('eax', 'x=', 1))
                 expect(self.c.vars).to_not(have_key('eax'))
 
-        with context('assign to sub-register'):
+        with description('assign to sub-register'):
             with it('assigns when value is an integer'):
                 self.c.step(('al', '=l', 0x01020304))
                 expect(self.c.vars['al']).to(equal(0x04))
@@ -221,7 +221,7 @@ with description('ConstConstraint'):
                 self.c.step(('al', '=l', 'esp'))
                 expect(self.c.vars).to_not(have_key('eax'))
 
-        with context('read memory'):
+        with description('read memory'):
             with it('reads from stack'):
                 self.c.vars['esp'] = ('esp_0', 0)
                 self.c.stack.values[(0, 4)] = 1
@@ -244,7 +244,7 @@ with description('ConstConstraint'):
                 self.c.step(('eax', '=[4]', 'esp'))
                 expect(self.c.vars).to_not(have_key('eax'))
 
-        with context('write memory'):
+        with description('write memory'):
             with it('writes to stack'):
                 self.c.vars['esp'] = ('esp_0', 0)
                 self.c.step(('esp', '[4]=', 1))
@@ -260,10 +260,10 @@ with description('ConstConstraint'):
                 self.c.step(('eax', '[4]=', 1))
                 expect(self.c.mem.values).to(equal({(1, 4): 1}))
 
-        with it('raises error on unknown assign'):
+        with it('raises ValueError on unknown assign'):
             expect(lambda: self.c.step((1, '??=', 1))).to(raise_error(ValueError))
 
-    with context('step_api_jmp'):
+    with description('step_api_jmp'):
         with before.each:
             self.patcher = patch.object(win_api, 'get_stack_change', return_value=0)
             self.patcher.__enter__()

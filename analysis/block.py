@@ -3,122 +3,58 @@ from collections import defaultdict
 
 from analysis.utils import MemValues, is_var
 
-__all__ = ['Block', 'simplify_block', 'sa_pprint']
+__all__ = ['Block', 'block_simplify']
 
 
 class Block:
-    def __init__(self, instrs=None, children=None, condition=None):
+    def __init__(self, addr_sizes=None, instrs=None, condition=None):
+        '''
+        instr is of the form: (dest, assign_op, ...).
+        '''
+        self.addr_sizes = addr_sizes or []
         self.instrs = instrs or []
-        self.children = children or []
         self.condition = condition
+        self.parents = set()
+        self._children = ()
 
-    def __eq__(self, other):
-        if isinstance(self, other.__class__):
-            return self.__dict__ == other.__dict__
-        return False
+    def __str__(self):
+        instrs_new = []
+        for instr in self.instrs:
+            parts = [f'0x{part:08x}' if isinstance(part, int) else part for part in instr]
+            arity = len(parts) - 3
+            if arity == 0:
+                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}')
+            elif arity == 1:
+                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}{parts[3]}')
+            elif arity == 2:
+                instrs_new.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
+            else:
+                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}({", ".join(parts[3:])})')
+        return '\n'.join(instrs_new)
 
+    def split(self, i):
+        upper_half = Block(addr_sizes=self.addr_sizes, instrs=self.instrs[:i])
+        for parent in self.parents:
+            parent._children = tuple(upper_half if child == self else child for child in parent._children)
+        self.parents.clear()
+        self.instrs = self.instrs[i:]
+        upper_half.children = (self,)
+        return upper_half
 
-def esil_to_sa(instrs):
-    '''
-    Convert to sa form: (dest, assign_op, ...src).
-    '''
-    instrs = [part for instr in instrs for part in instr.split(',')]
-    instrs_new = []
-    instr_stack = []
-    tmp_num = 0
-    for instr in instrs:
-        if str.isdecimal(instr):
-            instr_stack.append(int(instr))
-        elif instr.startswith('0x'):
-            instr_stack.append(int(instr, 16))
-        elif instr == '$0':
-            instr_stack.append(0)
-        elif instr == '$1':
-            instr_stack.append(1)
-        elif instr.startswith('$'):
-            # esil register
-            instr_stack.append(instr)
-        elif instr in (
-            'al', 'ah', 'ax', 'eax',
-            'cl', 'ch', 'cx', 'ecx',
-            'dl', 'dh', 'dx', 'edx',
-            'bl', 'bh', 'bx', 'ebx',
-            'sp', 'esp',
-            'bp', 'ebp',
-            'si', 'esi',
-            'di', 'edi',
-            'eip',
-            'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-        ):
-            # x86 register
-            instr_stack.append(instr)
-        elif instr == '=':
-            instrs_new.append((instr_stack.pop(), instr, instr_stack.pop()))
-        elif instr in ('[1]', '[2]', '[4]'):
-            # read from memory
-            instrs_new.append((f'tmp_{tmp_num}', f'={instr}', instr_stack.pop()))
-            instr_stack.append(f'tmp_{tmp_num}')
-            tmp_num += 1
-        elif instr.startswith('=['):
-            # write to memory
-            dest = instr_stack.pop()
-            src = instr_stack.pop()
-            size = instr[2:-1] or '4'
-            instrs_new.append((dest, f'[{size}]=', src))
-        elif instr in ('+=', '-=', '*=', '/=', '&=', '^='):
-            dest = instr_stack.pop()
-            src = instr_stack.pop()
-            instrs_new.append((dest, '=', instr[0], dest, src))
-        elif instr in ('+', '-', '*', '/', '&', '^', '=='):
-            instrs_new.append((f'tmp_{tmp_num}', '=', instr, instr_stack.pop(), instr_stack.pop()))
-            instr_stack.append(f'tmp_{tmp_num}')
-            tmp_num += 1
-        else:
-            raise ValueError('instr', instr)
-    return instrs_new
+    @property
+    def children(self):
+        return self._children
 
-
-def sa_include_flag_deps(instrs):
-    '''
-    Include all register dependencies for flags.
-    '''
-    instrs_new = instrs[:1]
-    flags = ('cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of')
-    for prev_instr, instr in zip(instrs[:-1], instrs[1:]):
-        if instr[0] in flags:
-            if prev_instr[0] not in flags:
-                instrs_new.pop()
-                instrs_new.append(('tmp', '=') + prev_instr[2:])
-                instrs_new.append(prev_instr[:2] + ('tmp',))
-            instr = instr + ('tmp',)
-        instrs_new.append(instr)
-    return instrs_new
-
-
-def sa_include_subword_deps(instrs):
-    '''
-    Include all register dependencies for sub-word modifications, generated redundant code is optimized later.
-    '''
-    regdefs = [
-        ('al', 'eax', 'l'), ('ah', 'eax', 'h'), ('ax', 'eax', 'x'),
-        ('cl', 'ecx', 'l'), ('ch', 'ecx', 'h'), ('cx', 'ecx', 'x'),
-        ('dl', 'edx', 'l'), ('dh', 'edx', 'h'), ('dx', 'edx', 'x'),
-        ('bl', 'ebx', 'l'), ('bh', 'ebx', 'h'), ('bx', 'ebx', 'x'),
-        ('sp', 'esp', 'x'),
-        ('bp', 'ebp', 'x'),
-        ('si', 'esi', 'x'),
-        ('di', 'edi', 'x'),
-    ]
-    instrs_new = []
-    for instr in instrs:
-        for subreg, reg, op in regdefs:
-            if subreg in instr[2:]:
-                instrs_new.append((subreg, f'={op}', reg))
-        instrs_new.append(instr)
-        for subreg, reg, op in regdefs:
-            if subreg == instr[0]:
-                instrs_new.append((reg, f'{op}=', subreg))
-    return instrs_new
+    @children.setter
+    def children(self, value):
+        # use tuple to force setting through this setter so parents are always updated
+        if not isinstance(value, tuple):
+            raise ValueError
+        for child in self.children:
+            child.parents.pop(self)
+        for child in value:
+            child.parents.add(self)
+        self._children = value
 
 
 def sa_to_ssa(instrs):
@@ -361,37 +297,12 @@ def sa_dead_code_elim(instrs, useful_regs):
     return instrs_new
 
 
-def sa_pprint(instrs):
-    instrs_new = []
-    for instr in instrs:
-        parts = [f'0x{part:08x}' if isinstance(part, int) else part for part in instr]
-        arity = len(parts) - 3
-        if arity == 0:
-            instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}')
-        elif arity == 1:
-            instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}{parts[3]}')
-        elif arity == 2:
-            instrs_new.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
-        else:
-            instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}({", ".join(parts[3:])})')
-    return '\n'.join(instrs_new)
-
-
-def simplify_block(block):
-    '''
-    Simplifies a block. A block is assumed to have no branches.
-    '''
-    # remove branch instructions
+def block_simplify(block, useful_regs=(
+    'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
+    'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
+)):
     instrs = block.instrs
-    instrs = [instr for instr in instrs if '?{' not in instr]
-    instrs = esil_to_sa(instrs)
-    instrs = sa_include_flag_deps(instrs)
-    instrs = sa_include_subword_deps(instrs)
     instrs = sa_to_ssa(instrs)
-    final_vars = (
-        'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
-        'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-    )
     while True:
         prev_len = len(instrs)
         instrs = sa_expr_simp(instrs)
@@ -399,7 +310,7 @@ def simplify_block(block):
         instrs = sa_copy_propagate(instrs)
         instrs = sa_const_fold(instrs)
         instrs = sa_mem_elim(instrs)
-        instrs = sa_dead_code_elim(instrs, final_vars)
+        instrs = sa_dead_code_elim(instrs, useful_regs)
         if len(instrs) == prev_len:
             break
     instrs = ssa_to_sa(instrs)

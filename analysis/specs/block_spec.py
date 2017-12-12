@@ -1,116 +1,7 @@
 from expects import *
 
-from analysis.block import (
-    esil_to_sa, sa_expr_simp, sa_include_flag_deps, sa_include_subword_deps, sa_mem_elim, sa_to_ssa, ssa_to_sa
-)
+from analysis.block import sa_expr_simp, sa_mem_elim, sa_to_ssa, ssa_to_sa
 from analysis.specs._stub import *
-
-with description('esil_to_sa'):
-    with it('converts constants'):
-        expect(esil_to_sa([
-            '1,eax,=',
-            '0x1,eax,=',
-            '$0,$z,=',
-            '$1,$z,=',
-        ])).to(equal([
-            ('eax', '=', 1),
-            ('eax', '=', 1),
-            ('$z', '=', 0),
-            ('$z', '=', 1),
-        ]))
-
-    with it('converts memory writes'):
-        expect(esil_to_sa([
-            '1,eax,=[]',
-            '1,eax,=[1]',
-            '1,eax,=[2]',
-            '1,eax,=[4]',
-        ])).to(equal([
-            ('eax', '[4]=', 1),
-            ('eax', '[1]=', 1),
-            ('eax', '[2]=', 1),
-            ('eax', '[4]=', 1),
-        ]))
-
-    with it('converts memory reads'):
-        expect(esil_to_sa([
-            'eax,[1]',
-            'eax,[2]',
-            'eax,[4]',
-        ])).to(equal([
-            ('tmp_0', '=[1]', 'eax'),
-            ('tmp_1', '=[2]', 'eax'),
-            ('tmp_2', '=[4]', 'eax'),
-        ]))
-
-    with it('converts operations'):
-        expect(esil_to_sa([
-            'ebx,eax,+',
-        ])).to(equal([
-            ('tmp_0', '=', '+', 'eax', 'ebx'),
-        ]))
-
-    with it('converts operation assign'):
-        expect(esil_to_sa([
-            '1,eax,+=',
-        ])).to(equal([
-            ('eax', '=', '+', 'eax', 1),
-        ]))
-
-    with it('converts multiple stacked operations'):
-        expect(esil_to_sa([
-            'edx,ecx,+,ebx,eax,-,*',
-        ])).to(equal([
-            ('tmp_0', '=', '+', 'ecx', 'edx'),
-            ('tmp_1', '=', '-', 'eax', 'ebx'),
-            ('tmp_2', '=', '*', 'tmp_1', 'tmp_0'),
-        ]))
-
-    with it('raises error for unknown opcodes'):
-        expect(lambda: esil_to_sa(['unknown'])).to(raise_error(ValueError))
-
-with description('sa_include_flag_deps'):
-    with it('converts flags'):
-        expect(sa_include_flag_deps([
-            ('eax', '[4]=', '+', 'eax', 'ebx'),
-            ('of', '=', '$o'),
-            ('sf', '=', '$s'),
-            ('zf', '=', '$z'),
-            ('cf', '=', '$c31'),
-            ('pf', '=', '$p'),
-        ])).to(equal([
-            ('tmp', '=', '+', 'eax', 'ebx'),
-            ('eax', '[4]=', 'tmp'),
-            ('of', '=', '$o', 'tmp'),
-            ('sf', '=', '$s', 'tmp'),
-            ('zf', '=', '$z', 'tmp'),
-            ('cf', '=', '$c31', 'tmp'),
-            ('pf', '=', '$p', 'tmp'),
-        ]))
-
-    with it('does not modify non-flag instructions'):
-        expect(sa_include_flag_deps([
-            ('eax', '=', 'eax', 'ebx'),
-        ])).to(equal([
-            ('eax', '=', 'eax', 'ebx'),
-        ]))
-
-with description('sa_include_subword_deps'):
-    with it('updates on subword writes'):
-        expect(sa_include_subword_deps([
-            ('al', '=', '1'),
-        ])).to(equal([
-            ('al', '=', '1'),
-            ('eax', 'l=', 'al'),
-        ]))
-
-    with it('updates on subword accesses'):
-        expect(sa_include_subword_deps([
-            ('ebx', '[2]=', 'al'),
-        ])).to(equal([
-            ('al', '=l', 'eax'),
-            ('ebx', '[2]=', 'al'),
-        ]))
 
 with description('sa_to_ssa'):
     with it('changes to ssa form'):
@@ -185,7 +76,7 @@ with description('sa_expr_simp'):
         ]))
 
 with description('sa_mem_elim'):
-    with context('read'):
+    with description('read'):
         with it('simplifies for constant addresses'):
             expect(sa_mem_elim([
                 (0, '[4]=', 1),
@@ -266,7 +157,7 @@ with description('sa_mem_elim'):
                 ('r1', '=[4]', 0),
             ]))
 
-    with context('write'):
+    with description('write'):
         with it('removes redundant write even if unrelated value is read in-between'):
             # redundant write if unrelated value is read in-between
             expect(sa_mem_elim([

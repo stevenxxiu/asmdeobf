@@ -1,20 +1,20 @@
 import r2pipe
 
-from analysis.block import sa_pprint, simplify_block
+from analysis.block import block_simplify, sa_pprint
 from analysis.constraint import ConstConstraint
 from analysis.extract import FuncsExtract
-from analysis.func import simplify_func
+from analysis.func import func_simplify
 
 
 def process_funcs(funcs):
     # simplify func
     for func in funcs:
-        simplify_func(func)
+        func_simplify(func)
 
     # de-obfuscate blocks
     for func in funcs:
         for block in func.blocks.values():
-            simplify_block(block)
+            block_simplify(block)
 
     # pretty-print
     for func in funcs:
