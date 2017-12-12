@@ -4,15 +4,15 @@ For pycharm's static analysis.
 
 
 def description(desc):
-    pass
+    ''''''
 
 
 def it(desc):
-    pass
+    ''''''
 
 
 def context(desc):
-    pass
+    ''''''
 
 
 class self:
