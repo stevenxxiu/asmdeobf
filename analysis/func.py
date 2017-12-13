@@ -84,7 +84,7 @@ class ESILToFunc:
 
     def convert(self):
         '''
-        Assumes stack is 0 before and after any branch.
+        Assumes stack is 0 before and after any branch, as temp variables are not preserved across block boundaries.
         :return: Function and block that the next instruction will continue from.
         '''
         tmp_num = 0
