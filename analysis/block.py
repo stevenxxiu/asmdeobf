@@ -7,20 +7,20 @@ __all__ = ['Block', 'block_simplify']
 
 
 class Block:
-    def __init__(self, addr_sizes=None, instrs=None, condition=None):
+    def __init__(self, addr_sizes=None, instrs=None):
         '''
         instr is of the form: (dest, assign_op, ...).
         '''
-        self.addr_sizes = addr_sizes or []
+        self.addr_sizes = addr_sizes or set()
         self.instrs = instrs or []
-        self.condition = condition
-        self.parents = set()
+        self.condition = None
+        self.parents = set()  # should not be modified directly by users
         self._children = ()
 
     def __str__(self):
         instrs_new = []
         for instr in self.instrs:
-            parts = [f'0x{part:08x}' if isinstance(part, int) else part for part in instr]
+            parts = [f'0x{part:x}' if isinstance(part, int) else part for part in instr]
             arity = len(parts) - 3
             if arity == 0:
                 instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}')
@@ -29,17 +29,27 @@ class Block:
             elif arity == 2:
                 instrs_new.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
             else:
-                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}({", ".join(parts[3:])})')
+                raise ValueError
         return '\n'.join(instrs_new)
 
     def split(self, i):
         upper_half = Block(addr_sizes=self.addr_sizes, instrs=self.instrs[:i])
+        upper_half.parents.update(self.parents)
         for parent in self.parents:
             parent._children = tuple(upper_half if child == self else child for child in parent._children)
         self.parents.clear()
         self.instrs = self.instrs[i:]
         upper_half.children = (self,)
         return upper_half
+
+    def merge(self, upper_half):
+        for parent in upper_half.parents:
+            parent._children = tuple(self if child == upper_half else child for child in parent._children)
+        upper_half.children = ()
+        self.parents = set(upper_half.parents)
+        upper_half.parents.clear()
+        self.addr_sizes.update(upper_half.addr_sizes)
+        self.instrs = upper_half.instrs + self.instrs
 
     @property
     def children(self):
@@ -51,7 +61,7 @@ class Block:
         if not isinstance(value, tuple):
             raise ValueError
         for child in self.children:
-            child.parents.pop(self)
+            child.parents.remove(self)
         for child in value:
             child.parents.add(self)
         self._children = value

@@ -1,7 +1,92 @@
+from textwrap import dedent
+
 from expects import *
 
-from analysis.block import sa_expr_simp, sa_mem_elim, sa_to_ssa, ssa_to_sa
+from analysis.block import Block, sa_expr_simp, sa_mem_elim, sa_to_ssa, ssa_to_sa
 from analysis.specs._stub import *
+from analysis.specs._utils import to_blocks
+
+with description('Block'):
+    with description('__str__'):
+        with it('converts to str'):
+            expect(str(Block(instrs=[
+                ('eax', '=', 1),
+                ('eax', '=', '!', 1),
+                ('eax', '=', '+', 'ebx', 1),
+            ]))).to(equal(dedent('''
+                eax = 0x1
+                eax = !0x1
+                eax = ebx + 0x1
+            ''').strip()))
+
+        with it('raises ValueError on unknown op arity'):
+            expect(lambda: str(Block(instrs=[
+                ('eax', '=', '??', 1, 1, 1),
+            ]))).to(raise_error(ValueError))
+
+    with it('splits block'):
+        blocks = to_blocks([
+            {'children': (2,)},
+            {'children': (2,)},
+            {'addr_sizes': {(0, 4)}, 'instrs': [
+                ('eax', '=', 1), ('eax', '=', 2)
+            ], 'condition': 'tmp', 'children': (3, 4)},
+            {'children': ()},
+            {'children': ()},
+        ])
+        lower_half, upper_half = blocks[2], blocks[2].split(1)
+        expect(blocks[0].children).to(equal((upper_half,)))
+        expect(blocks[1].children).to(equal((upper_half,)))
+        expect(upper_half.addr_sizes).to(equal({(0, 4)}))
+        expect(upper_half.instrs).to(equal([('eax', '=', 1)]))
+        expect(upper_half.parents).to(equal({blocks[0], blocks[1]}))
+        expect(upper_half.children).to(equal((lower_half,)))
+        expect(lower_half.addr_sizes).to(equal({(0, 4)}))
+        expect(lower_half.instrs).to(equal([('eax', '=', 2)]))
+        expect(lower_half.parents).to(equal({upper_half}))
+        expect(lower_half.condition).to(equal('tmp'))
+        expect(lower_half.children).to(equal((blocks[3], blocks[4])))
+
+    with it('merges blocks no matter how many children the block has'):
+        blocks = to_blocks([
+            {'children': (2,)},
+            {'children': (2,)},
+            {'addr_sizes': {(0, 4)}, 'instrs': [('eax', '=', 1)], 'condition': 'tmp_1', 'children': (3, 4)},
+            {'addr_sizes': {(4, 4)}, 'instrs': [('eax', '=', 2)], 'condition': 'tmp_2', 'children': (5, 6)},
+            {'children': ()},
+            {'children': ()},
+            {'children': ()},
+        ])
+        upper_half, lower_half = blocks[2], blocks[3]
+        blocks[3].merge(blocks[2])
+        expect(blocks[0].children).to(equal((lower_half,)))
+        expect(blocks[1].children).to(equal((lower_half,)))
+        expect(lower_half.addr_sizes).to(equal({(0, 4), (4, 4)}))
+        expect(lower_half.instrs).to(equal([('eax', '=', 1), ('eax', '=', 2)]))
+        expect(lower_half.condition).to(equal('tmp_2'))
+        expect(lower_half.parents).to(equal({blocks[0], blocks[1]}))
+        expect(lower_half.children).to(equal((blocks[5], blocks[6])))
+        expect(upper_half.parents).to(equal(set()))
+        expect(upper_half.children).to(equal(()))
+        expect(blocks[4].parents).to(equal(set()))
+
+    with description('children.setter'):
+        with it('only allows setting with tuples'):
+            expect(lambda: setattr(Block(), 'children', [Block(), Block()])).to(raise_error(ValueError))
+
+        with it('updates children & parents after setting children'):
+            blocks = [Block(), Block(), Block(), Block(), Block()]
+            blocks[0].children = (blocks[1], blocks[2])
+            expect(blocks[0].children).to(equal((blocks[1], blocks[2])))
+            expect(blocks[1].parents).to(equal({blocks[0]}))
+            expect(blocks[2].parents).to(equal({blocks[0]}))
+            blocks[0].children = (blocks[3], blocks[4])
+            expect(blocks[0].children).to(equal((blocks[3], blocks[4])))
+            expect(blocks[1].parents).to(equal(set()))
+            expect(blocks[2].parents).to(equal(set()))
+            expect(blocks[3].parents).to(equal({blocks[0]}))
+            expect(blocks[4].parents).to(equal({blocks[0]}))
+
 
 with description('sa_to_ssa'):
     with it('changes to ssa form'):

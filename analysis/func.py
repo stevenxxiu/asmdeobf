@@ -10,7 +10,10 @@ class Function:
 
     @property
     def blocks(self):
-        # dfs to be more natural for unit tests (matches esil order)
+        '''
+        DFS is more natural for unit tests (matches esil order).
+        Children can be modified during traversal.
+        '''
         visited = set()
         stack = [self.block]
         while stack:
@@ -75,7 +78,7 @@ class ESILToFunc:
         return instrs_new
 
     def _new_block(self):
-        return Block(addr_sizes=[(self.addr, self.size)])
+        return Block(addr_sizes={(self.addr, self.size)})
 
     def _append_instr(self, instr, block):
         if len(self.instr_stack) == 0:
@@ -218,14 +221,18 @@ class ESILToFunc:
 
 
 def func_remove_same_children(func):
-    # XXX test
-    for block_addr, block in func.blocks.items():
-        if len(block.children) == 2 and block.children[0] == block.children[1]:
-            child = func.blocks[block.children[0]]
-            child.instrs = block.instrs + child.instrs
-            func.blocks[block_addr] = child
+    for block in func.blocks:
+        if len(block.children) == 2:
+            child_1, child_2 = block.children
+            if (
+                child_1.instrs == child_2.instrs and child_1.children == child_2.children and
+                child_1.condition == child_2.condition
+            ):
+                child_1.addr_sizes.update(child_2.addr_sizes)
+                child_1.merge(block)
+                if block == func.block:
+                    func.block = child_1
 
 
 def func_simplify(func):
-    # XXX test
     func_remove_same_children(func)
