@@ -128,9 +128,12 @@ class ESILToFunc:
                 self._append_instr((f'tmp_{tmp_num}', '=', part, src), block)
                 self.instr_stack.append(f'tmp_{tmp_num}')
                 tmp_num += 1
-            elif part in ('++=', '--='):
+            elif part == '++=':
                 src = self.instr_stack.pop()
-                self._append_instr((src, '=', part[:-1], src), block)
+                self._append_instr((src, '=', '+', src, 1), block)
+            elif part == '--=':
+                src = self.instr_stack.pop()
+                self._append_instr((src, '=', '-', src, 1), block)
             elif part in ('&=', '|=', '^=', '+=', '-=', '*=', '/='):
                 dest = self.instr_stack.pop()
                 src = self.instr_stack.pop()

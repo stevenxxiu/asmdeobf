@@ -70,11 +70,18 @@ with description('ESILToFunc'):
                 ('zf', '=', 'tmp_0'),
             ]}])))
 
-        with it('converts unary assigns'):
+        with it('converts ++= to + (no point having separate operation)'):
             expect(ESILToFunc(
                 'eax,++=', 0, 4
             ).convert()[0]).to(eq_func((0, [{'addr_sizes': [(0, 4)], 'instrs': [
-                ('eax', '=', '++', 'eax'),
+                ('eax', '=', '+', 'eax', 1),
+            ]}])))
+
+        with it('converts --= to - (no point having separate operation)'):
+            expect(ESILToFunc(
+                'eax,--=', 0, 4
+            ).convert()[0]).to(eq_func((0, [{'addr_sizes': [(0, 4)], 'instrs': [
+                ('eax', '=', '-', 'eax', 1),
             ]}])))
 
         with it('converts binary assigns'):
