@@ -1,7 +1,7 @@
 from analysis.utils import MemValues, is_var
 from analysis.winapi import win_api
 
-__all__ = ['ConstConstraint', 'DisjunctConstPredicate']
+__all__ = ['ConstConstraint', 'DisjunctConstConstraint']
 
 
 class ConstConstraint:
@@ -208,7 +208,7 @@ class ConstConstraint:
             self.stack.invalidate()
 
 
-class DisjunctConstPredicate:
+class DisjunctConstConstraint:
     '''
     Allows flag values to be a disjunction when widening.
     '''
