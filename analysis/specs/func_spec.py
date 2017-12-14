@@ -192,6 +192,15 @@ with description('ESILToFunc'):
                 {'addr_sizes': {(0, 4)}, 'instrs': []},
             ])))
 
+        with it('converts jmp into start of multi-stacked operation'):
+            expect(ESILToFunc(
+                '2,GOTO,'
+                'eax,eax,+,eax,=', 0, 4
+            ).convert()[0]).to(eq_func(to_func(0, [
+                {'addr_sizes': {(0, 4)}, 'instrs': [], 'children': (1,)},
+                {'addr_sizes': {(0, 4)}, 'instrs': [('tmp_0', '=', '+', 'eax', 'eax'), ('eax', '=', 'tmp_0')]},
+            ])))
+
         with it('raises ValueError if stack is not 0 before jmp'):
             expect(lambda: ESILToFunc('0,0,SKIP', 0, 4).convert()).to(raise_error(ValueError))
             expect(lambda: ESILToFunc('0,0,GOTO', 0, 4).convert()).to(raise_error(ValueError))

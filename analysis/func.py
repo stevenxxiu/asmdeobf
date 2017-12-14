@@ -30,9 +30,8 @@ class ESILToFunc:
         self.addr = addr
         self.size = size
         self.instr_stack = []
-        self.stack_zeros = []  # [i], for gotos and branches, assumes they are always have stack 0
         self.block_stack = []  # [block], for branches
-        self.gotos = []  # [(block, i)], for gotos
+        self.gotos = []  # [(block_goto_is_at_end_of, i)], for gotos
         self.i_to_block_i = {}  # {i: (block, block_i)}, records all points we can jmp to, for gotos
 
     @staticmethod
@@ -80,11 +79,6 @@ class ESILToFunc:
     def _new_block(self):
         return Block(addr_sizes={(self.addr, self.size)})
 
-    def _append_instr(self, instr, block):
-        if len(self.instr_stack) == 0:
-            self.i_to_block_i[self.stack_zeros[-1]] = (block, len(block.instrs))
-        block.instrs.append(instr)
-
     def convert(self):
         '''
         Assumes stack is 0 before and after any branch, as temp variables are not preserved across block boundaries.
@@ -98,7 +92,7 @@ class ESILToFunc:
         parts = self.instr.split(',')
         for i, part in enumerate(parts):
             if len(self.instr_stack) == 0:
-                self.stack_zeros.append(i)
+                self.i_to_block_i[i] = (block, len(block.instrs))  # cannot be in middle of instruction when 0
             if str.isdecimal(part):
                 self.instr_stack.append(int(part))
             elif part.startswith('0x'):
@@ -125,31 +119,31 @@ class ESILToFunc:
                 # x86 register
                 self.instr_stack.append(part)
             elif part == '=':
-                self._append_instr((self.instr_stack.pop(), part, self.instr_stack.pop()), block)
+                block.instrs.append((self.instr_stack.pop(), part, self.instr_stack.pop()))
             elif part in ('!',):
                 src = self.instr_stack.pop()
-                self._append_instr((f'tmp_{tmp_num}', '=', part, src), block)
+                block.instrs.append((f'tmp_{tmp_num}', '=', part, src))
                 self.instr_stack.append(f'tmp_{tmp_num}')
                 tmp_num += 1
             elif part == '++=':
                 src = self.instr_stack.pop()
-                self._append_instr((src, '=', '+', src, 1), block)
+                block.instrs.append((src, '=', '+', src, 1))
             elif part == '--=':
                 src = self.instr_stack.pop()
-                self._append_instr((src, '=', '-', src, 1), block)
+                block.instrs.append((src, '=', '-', src, 1))
             elif part in ('&=', '|=', '^=', '+=', '-=', '*=', '/='):
                 dest = self.instr_stack.pop()
                 src = self.instr_stack.pop()
-                self._append_instr((dest, '=', part[:-1], dest, src), block)
+                block.instrs.append((dest, '=', part[:-1], dest, src))
             elif part in ('&', '|', '^', '+', '-', '==', '*', '/'):
                 src_1 = self.instr_stack.pop()
                 src_2 = self.instr_stack.pop()
-                self._append_instr((f'tmp_{tmp_num}', '=', part, src_1, src_2), block)
+                block.instrs.append((f'tmp_{tmp_num}', '=', part, src_1, src_2))
                 self.instr_stack.append(f'tmp_{tmp_num}')
                 tmp_num += 1
             elif part in ('[1]', '[2]', '[4]'):
                 # read from memory
-                self._append_instr((f'tmp_{tmp_num}', f'={part}', self.instr_stack.pop()), block)
+                block.instrs.append((f'tmp_{tmp_num}', f'={part}', self.instr_stack.pop()))
                 self.instr_stack.append(f'tmp_{tmp_num}')
                 tmp_num += 1
             elif part.startswith('=['):
@@ -157,7 +151,7 @@ class ESILToFunc:
                 dest = self.instr_stack.pop()
                 src = self.instr_stack.pop()
                 size = part[2:-1] or '4'
-                self._append_instr((dest, f'[{size}]=', src), block)
+                block.instrs.append((dest, f'[{size}]=', src))
             elif part == '?{':
                 block.condition = self.instr_stack.pop()
                 block.children = (self._new_block(), self._new_block())
@@ -167,29 +161,29 @@ class ESILToFunc:
                 block = block.children[0]
             elif part == '}':
                 block.children = (self.block_stack.pop(),)
-                block = block.children[0]
                 if len(self.instr_stack) != 0:
                     raise ValueError('stack is not 0')
+                block = block.children[0]
             elif part == 'SKIP':
                 self.gotos.append((block, i + self.instr_stack.pop() + 1))
-                block = self._new_block()
                 if len(self.instr_stack) != 0:
                     raise ValueError('stack is not 0')
+                block = self._new_block()
             elif part == 'GOTO':
                 self.gotos.append((block, self.instr_stack.pop()))
-                block = self._new_block()
                 if len(self.instr_stack) != 0:
                     raise ValueError('stack is not 0')
+                block = self._new_block()
             elif part == 'LOOP':
                 self.gotos.append((block, 0))
-                block = self._new_block()
                 if len(self.instr_stack) != 0:
                     raise ValueError('stack is not 0')
+                block = self._new_block()
             elif part == 'BREAK':
                 self.gotos.append((block, len(parts)))
-                block = self._new_block()
                 if len(self.instr_stack) != 0:
                     raise ValueError('stack is not 0')
+                block = self._new_block()
             else:
                 raise ValueError('instr', part)
         if len(self.instr_stack) != 0:
