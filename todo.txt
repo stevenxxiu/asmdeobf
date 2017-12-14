@@ -1,5 +1,4 @@
 
-- Full coverage of block.py
 - Update extract.py to perform abstract interpretation and to adapt to an instruction mapping to a cfg
 - Constraint solver should be fed input as a block (to improve speed first simplify so that only the condition variables matter)
 - run main.py to see what is still broken, and simplify cfg which has same blocks of instructions

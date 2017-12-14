@@ -1,8 +1,13 @@
+from contextlib import ExitStack
 from textwrap import dedent
+from unittest.mock import patch, PropertyMock
 
 from expects import *
 
-from analysis.block import Block, sa_expr_simp, sa_mem_elim, sa_to_ssa, ssa_to_sa
+from analysis.block import (
+    Block, block_simplify, sa_common_subexpr, sa_const_fold, sa_copy_propagate, sa_dead_code_elim, sa_expr_simp,
+    sa_mem_elim, sa_sub_assign_retrieve, sa_to_ssa, ssa_to_sa
+)
 from analysis.specs._stub import *
 from analysis.specs._utils import to_blocks
 
@@ -275,3 +280,114 @@ with description('sa_mem_elim'):
                 ('r1', '=[4]', 's1'),
                 (0, '[4]=', 2),
             ]))
+
+with description('sa_common_subexpr'):
+    with it('substitutes common expressions'):
+        expect(sa_common_subexpr([
+            ('r2', '=', '*', 'r0', 'r1'),
+            ('r3', '=', '*', 'r0', 'r1'),
+        ])).to(equal([
+            ('r2', '=', '*', 'r0', 'r1'),
+            ('r3', '=', 'r2'),
+        ]))
+
+with description('sa_copy_propagate'):
+    with it('substitutes expressions with their equivalents'):
+        expect(sa_copy_propagate([
+            ('r1', '=', 'r0'),
+            ('r3', '=', '*', 'r1', 'r2'),
+        ])).to(equal([
+            ('r1', '=', 'r0'),
+            ('r3', '=', '*', 'r0', 'r2'),
+        ]))
+
+    with it('substitutes memory write vars with their equivalents'):
+        expect(sa_copy_propagate([
+            ('r1', '=', 'r0'),
+            ('r1', '[4]=', '*', 'r2', 'r3'),
+        ])).to(equal([
+            ('r1', '=', 'r0'),
+            ('r0', '[4]=', '*', 'r2', 'r3'),
+        ]))
+
+with description('sa_sub_assign_retrieve'):
+    with it('replaces sub assign then retrieve with an assign equivalent'):
+        expect(sa_sub_assign_retrieve([
+            ('r1', 'l=', 'r0'),
+            ('r2', '=l', 'r1'),
+            ('r4', 'h=', 'r3'),
+            ('r5', '=h', 'r4'),
+            ('r7', 'x=', 'r6'),
+            ('r8', '=x', 'r7'),
+        ])).to(equal([
+            ('r1', 'l=', 'r0'),
+            ('r2', '=', 'r0'),
+            ('r4', 'h=', 'r3'),
+            ('r5', '=', 'r3'),
+            ('r7', 'x=', 'r6'),
+            ('r8', '=', 'r6'),
+        ]))
+
+with description('sa_const_fold'):
+    with it('folds + and -'):
+        expect(sa_const_fold([
+            ('r0', '=', '+', 1, 2),
+            ('r1', '=', '-', 3, 1),
+        ])).to(equal([
+            ('r0', '=', 3),
+            ('r1', '=', 2),
+        ]))
+
+with description('sa_dead_code_elim'):
+    with it('preserves writes to useful vars and any ancestor vars which taint useful vars'):
+        expect(sa_dead_code_elim([
+            ('r_0', '=', 1),
+            ('r_1', '=', 'r_0'),
+            ('s_0', '=', 'r_1'),
+            ('t_0', '=', 'r_1'),
+        ], ['s'])).to(equal([
+            ('r_0', '=', 1),
+            ('r_1', '=', 'r_0'),
+            ('s_0', '=', 'r_1'),
+        ]))
+
+    with it('preserves writes to memory and any ancestor vars which taint any var in the expression'):
+        expect(sa_dead_code_elim([
+            ('r_0', '=', 1),
+            ('r_1', '=', 2),
+            ('r_2', '=', 3),
+            ('r_2', '[4]=', '+', 'r_0', 'r_1'),
+            ('t_0', '=', 'r_1'),
+        ], [])).to(equal([
+            ('r_0', '=', 1),
+            ('r_1', '=', 2),
+            ('r_2', '=', 3),
+            ('r_2', '[4]=', '+', 'r_0', 'r_1'),
+        ]))
+
+with description('block_simplify'):
+    with it('converts to and from ssa form'):
+        with patch('analysis.block.sa_to_ssa') as sa_to_ssa_, patch('analysis.block.ssa_to_sa') as ssa_to_sa_:
+            block_simplify(Block())
+            expect(sa_to_ssa_.call_count).to(be(1))
+            expect(ssa_to_sa_.call_count).to(be(1))
+
+    with it('repeatedly calls simplification routines until the lengths of instructions stay constant'):
+        with ExitStack() as stack:
+            sa_simps = [stack.enter_context(patch(f'analysis.block.{name}', side_effect=(
+                (lambda instrs: instrs) if name != 'sa_dead_code_elim' else
+                (lambda instrs, _: instrs[:-1] if len(instrs) > 2 else instrs[::-1])
+            ))) for name in [
+                'sa_expr_simp', 'sa_common_subexpr', 'sa_sub_assign_retrieve', 'sa_copy_propagate', 'sa_const_fold',
+                'sa_mem_elim', 'sa_dead_code_elim',
+            ]]
+            block = Block(instrs=[
+                ('eax', '=', 0),
+                ('eax', '=', 1),
+                ('eax', '=', 2),
+                ('eax', '=', 3),
+            ])
+            block_simplify(block)
+            for sa_simp in sa_simps:
+                expect(sa_simp.call_count).to(be(3))
+            expect(len(block.instrs)).to(be(2))

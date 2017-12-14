@@ -100,7 +100,7 @@ def ssa_to_sa(instrs):
     init_vars = {}
     for instr in instrs:
         for part in instr:
-            if part.endswith('_0'):
+            if is_var(part) and part.endswith('_0'):
                 init_vars[part.split('_')[0]] = part
     final_vars = {}
     for instr in instrs:
@@ -176,6 +176,18 @@ def sa_common_subexpr(instrs):
     return instrs_new
 
 
+def sa_sub_assign_retrieve(instrs):
+    instrs_new = []
+    var_map = {}
+    for instr in instrs:
+        if len(instr) == 3 and instr[1] in ('l=', 'h=', 'x='):
+            var_map[(instr[0], instr[1][0])] = instr[2]
+        if len(instr) == 3 and instr[1] in ('=l', '=h', '=x') and (instr[2], instr[1][1]) in var_map:
+            instr = instr[:1] + ('=', var_map[(instr[2], instr[1][1])])
+        instrs_new.append(instr)
+    return instrs_new
+
+
 def sa_copy_propagate(instrs):
     '''
     This only copies variables and not expressions. Otherwise the following will not be simpler:
@@ -199,10 +211,6 @@ def sa_copy_propagate(instrs):
         # store propagated var
         if len(instr) == 3 and instr[1] == '=':
             var_map[instr[0]] = instr[2]
-        if len(instr) == 3 and instr[1] == 'x=':
-            var_map[(instr[0], 'x')] = instr[2]
-        if len(instr) == 3 and instr[1] == '=x' and (instr[2], 'x') in var_map:
-            var_map[instr[0]] = var_map[(instr[2], 'x')]
         instrs_new.append(instr)
     return instrs_new
 
@@ -302,7 +310,7 @@ def sa_dead_code_elim(instrs, useful_regs):
                     tainted_vars.add(part)
     # only include instructions which write to tainted vars
     for instr in instrs:
-        if instr[1].endswith(']=') or instr[0] in tainted_vars:
+        if instr[0] in tainted_vars:
             instrs_new.append(instr)
     return instrs_new
 
@@ -317,6 +325,7 @@ def block_simplify(block, useful_regs=(
         prev_len = len(instrs)
         instrs = sa_expr_simp(instrs)
         instrs = sa_common_subexpr(instrs)
+        instrs = sa_sub_assign_retrieve(instrs)
         instrs = sa_copy_propagate(instrs)
         instrs = sa_const_fold(instrs)
         instrs = sa_mem_elim(instrs)

@@ -222,6 +222,6 @@ with description('func_remove_same_children'):
 
 with description('func_simplify'):
     with it('calls func_remove_same_children'):
-        with patch('analysis.func.func_remove_same_children') as patched:
+        with patch('analysis.func.func_remove_same_children') as func_remove_same_children_:
             func_simplify(None)
-            expect(patched.call_count).to(be(1))
+            expect(func_remove_same_children_.call_count).to(be(1))
