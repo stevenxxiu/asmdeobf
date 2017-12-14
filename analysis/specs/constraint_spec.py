@@ -2,8 +2,9 @@ from unittest.mock import patch
 
 from expects import *
 
-from analysis.constraint import ConstConstraint
+from analysis.constraint import ConstConstraint, DisjunctConstConstraint
 from analysis.specs._stub import *
+from analysis.specs._utils import to_blocks
 from analysis.winapi import win_api
 
 with description('ConstConstraint'):
@@ -46,7 +47,7 @@ with description('ConstConstraint'):
             self.c1 = ConstConstraint()
             self.c2 = ConstConstraint()
 
-        with it('widens regs'):
+        with it('widens vars'):
             self.c1.vars = {'eax': 0, 'ebx': 1, 'ecx': 2}
             self.c2.vars = {'ebx': 2, 'ecx': 2, 'edx': 3}
             self.c1.widen(self.c2)
@@ -66,6 +67,13 @@ with description('ConstConstraint'):
             self.c1.mem_var = 'eax'
             self.c1.widen(self.c2)
             expect(self.c1.mem.values).to(equal({}))
+
+    with description('finalize'):
+        with it('removes temp vars'):
+            c = ConstConstraint()
+            c.vars = {'eax': 0, 'tmp': 0}
+            c.finalize()
+            expect(c.vars).to(equal({'eax': 0}))
 
     with description('step'):
         with before.each:
@@ -296,3 +304,47 @@ with description('ConstConstraint'):
             self.c.mem.values[(0, 4)] = 1
             self.c.step_api_jmp('some_lib', 'some_method')
             expect(self.c.mem.values).to(equal({}))
+
+with description('DisjunctConstConstraint'):
+    with description('from_predicate'):
+        with it('solves a branching constraint'):
+            block = to_blocks([{'instrs': [
+                ('tmp_0', '=', '^', 'of', 'sf'),
+                ('tmp_1', '=', '|', 'tmp_0', 'zf'),
+            ], 'condition': 'tmp_1'}])[0]
+            expect(DisjunctConstConstraint.from_predicate(block, 1)).to(equal(DisjunctConstConstraint([
+                ConstConstraint({'sf': 0, 'of': 1}),
+                ConstConstraint({'sf': 1, 'of': 0}),
+                ConstConstraint({'zf': 1, 'sf': 0, 'of': 0}),
+                ConstConstraint({'zf': 1, 'sf': 1, 'of': 1}),
+            ])))
+
+        with it('does not modify the original block'):
+            block = to_blocks([{'instrs': [
+                ('tmp_0', '=', 1),
+                ('tmp_1', '=', 1),
+            ], 'condition': 'tmp_0'}])[0]
+            DisjunctConstConstraint.from_predicate(block, 1)
+            expect(len(block.instrs)).to(equal(2))
+
+        with it('raises ValueError if the branch is dependent on more than flags'):
+            block = to_blocks([{'instrs': [
+                ('tmp_0', '=', 'eax'),
+            ], 'condition': 'tmp_0'}])[0]
+            expect(lambda: DisjunctConstConstraint.from_predicate(block, 1)).to(raise_error(ValueError))
+
+    with description('_expand_constraints'):
+        with it('expands None'):
+            expect(DisjunctConstConstraint._expand_constraints([
+                (None, 0, None),
+            ])).to(equal([
+                (0, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1),
+            ]))
+
+    with description('_reduce_constraints'):
+        with it('reduces to None'):
+            expect(DisjunctConstConstraint._reduce_constraints([
+                (0, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1),
+            ])).to(equal([
+                (None, 0, None),
+            ]))

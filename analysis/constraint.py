@@ -1,3 +1,8 @@
+import itertools
+from collections import defaultdict
+from copy import deepcopy
+
+from analysis.block import block_simplify
 from analysis.utils import MemValues, is_var
 from analysis.winapi import win_api
 
@@ -27,8 +32,8 @@ class ConstConstraint:
     }
     assign_bits = {'l': (0, 7), 'h': (8, 15), 'x': (0, 15)}
 
-    def __init__(self):
-        self.vars = {}
+    def __init__(self, vars_=None):
+        self.vars = vars_ or {}
         self.mem_var = 0
         self.mem = MemValues()
         self.stack = MemValues()
@@ -46,6 +51,11 @@ class ConstConstraint:
         for name, val in {'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'tf': 0, 'df': 0, 'of': 0}.items():
             self.vars[name] = val
         return self
+
+    def finalize(self):
+        for name in list(self.vars):
+            if name not in self.bits:
+                self.vars.pop(name)
 
     def widen(self, other):
         if self.mem_var != other.mem_var:
@@ -210,9 +220,88 @@ class ConstConstraint:
 
 class DisjunctConstConstraint:
     '''
-    Allows flag values to be a disjunction when widening.
+    A disjunction of const constraints, to constrain jcc's. Only the flags are allowed to vary on finalize, to keep
+    the # of constraints reasonable (other vars are allowed to change on step so we can compute tmp vars).
     '''
+    flags = ['cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of']
+
+    def __init__(self, const_cons=None):
+        self.const_cons = const_cons or []
+
+    def __eq__(self, other):
+        return self.const_cons == other.const_cons
 
     @staticmethod
-    def from_predicate(instrs, predicate):
+    def from_oep():
+        return DisjunctConstConstraint([ConstConstraint.from_oep()])
+
+    @classmethod
+    def from_predicate(cls, block, value):
+        '''
+        Brute-forces all flags to solve the constraint.
+        '''
+        tuple_cons = []
+        block = deepcopy(block)
+        block_simplify(block, (block.condition,))
+        for values in itertools.product((0, 1), repeat=len(cls.flags)):
+            constraint = ConstConstraint(dict(zip(cls.flags, values)))
+            for instr in block.instrs:
+                constraint.step(instr)
+            if block.condition not in constraint.vars:
+                raise ValueError(f'could not evaluate {block.condition} to a const')
+            if constraint.vars[block.condition] == value:
+                tuple_cons.append(values)
+        tuple_cons = cls._reduce_constraints(tuple_cons)
+        return DisjunctConstConstraint([ConstConstraint({
+            key: val for key, val in zip(cls.flags, con) if val is not None
+        }) for con in tuple_cons])
+
+    @staticmethod
+    def _expand_constraints(tuple_cons):
+        # go through each flag
+        for i in range(len(tuple_cons[0])):
+            res = []
+            for con in tuple_cons:
+                if con[i] is None:
+                    res.append(con[:i] + (0,) + con[i + 1:])
+                    res.append(con[:i] + (1,) + con[i + 1:])
+                else:
+                    res.append(con)
+            tuple_cons = res
+        return tuple_cons
+
+    @staticmethod
+    def _reduce_constraints(tuple_cons):
+        # go through each flag
+        for i in range(len(tuple_cons[0])):
+            rest_dups = defaultdict(list)
+            for con in tuple_cons:
+                rest_dups[con[:i] + con[i + 1:]].append(con[i])
+            tuple_cons = []
+            for rest_val, flag_vals in rest_dups.items():
+                tuple_cons.append(rest_val[:i] + (flag_vals[0] if len(flag_vals) == 1 else None,) + rest_val[i:])
+        return tuple_cons
+
+    def finalize(self, tuple_cons=None):
+        # XXX only allow the flags to vary, and detect any flag variations
+        flag_constraints = []
+        # for constraint in self.const_constraints:
+        #     flag_constraints.append({flag: const for flag in })
+
+        # XXX just go through every flag combo with the constraint since from_predicate does it anyway
+
+        non_flags = ConstConstraint()
+
         pass
+
+    def widen(self, other):
+        self.const_cons.extend(other.const_constraints)
+        self.finalize()
+
+    def step(self, instr):
+        for con in self.const_cons:
+            con.step(instr)
+
+    def step_api_jmp(self, lib_name, api_name):
+        for cons in self.const_cons:
+            cons.step_api_jmp(lib_name, api_name)
