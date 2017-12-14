@@ -32,7 +32,7 @@ class ESILToFunc:
         self.instr_stack = []
         self.block_stack = []  # [block], for branches
         self.gotos = []  # [(block_goto_is_at_end_of, i)], for gotos
-        self.i_to_block_i = {}  # {i: (block, block_i)}, records all points we can jmp to, for gotos
+        self.labels = {}  # {i: (block, block_i)}, records all points we can jmp to, for gotos
 
     @staticmethod
     def _sa_include_flag_deps(instrs):
@@ -92,7 +92,7 @@ class ESILToFunc:
         parts = self.instr.split(',')
         for i, part in enumerate(parts):
             if len(self.instr_stack) == 0:
-                self.i_to_block_i[i] = (block, len(block.instrs))  # cannot be in middle of instruction when 0
+                self.labels[i] = (block, len(block.instrs))  # cannot be in middle of instruction when 0
             if str.isdecimal(part):
                 self.instr_stack.append(int(part))
             elif part.startswith('0x'):
@@ -192,14 +192,14 @@ class ESILToFunc:
 
         # process gotos
         for block, i in self.gotos:
-            if i == len(parts) and i not in self.i_to_block_i:
+            if i == len(parts) and i not in self.labels:
                 # create new empty block
                 end_block.children = (self._new_block(),)
                 end_block = end_block.children[0]
-                self.i_to_block_i[i] = end_block, 0
-            if i not in self.i_to_block_i:
+                self.labels[i] = end_block, 0
+            if i not in self.labels:
                 raise ValueError('stack is not 0')
-            goto_block, block_i = self.i_to_block_i[i]
+            goto_block, block_i = self.labels[i]
             if block_i != 0:
                 upper_half = goto_block.split(block_i)
                 if start_block == goto_block:
