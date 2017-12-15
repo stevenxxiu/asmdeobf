@@ -88,14 +88,14 @@ def sa_to_ssa(instrs):
                 instr_part = var_map[instr_part]
             instr_new[i] = instr_part
         instrs_new.append(tuple(instr_new))
-    return instrs_new
+    return instrs_new, var_map
 
 
 def ssa_to_sa(instrs):
     '''
     Convert back to sa form.
     '''
-    instrs = sa_to_ssa(instrs)
+    instrs, var_map_ssa = sa_to_ssa(instrs)
     instrs_new = []
     init_vars = {}
     for instr in instrs:
@@ -107,10 +107,10 @@ def ssa_to_sa(instrs):
         if not instr[1].endswith(']='):
             if not instr[0].startswith('tmp_'):
                 final_vars[instr[0].split('_')[0]] = instr[0]
-    var_map = {name: name_part for name_part, name in itertools.chain(init_vars.items(), final_vars.items())}
+    var_map_sa = {name: name_part for name_part, name in itertools.chain(init_vars.items(), final_vars.items())}
     for instr in instrs:
-        instrs_new.append(tuple(var_map.get(part, part) for part in instr))
-    return instrs_new
+        instrs_new.append(tuple(var_map_sa.get(part, part) for part in instr))
+    return instrs_new, {name: var_map_sa.get(val, val) for name, val in var_map_ssa.items()}
 
 
 def sa_expr_simp(instrs):
@@ -289,13 +289,10 @@ def sa_dead_code_elim(instrs, useful_regs):
     instrs_new = []
     tainted_vars = set()
     # find vars which write to registers
-    tainted_vars_map = {}
     for instr in instrs:
         if not instr[1].endswith(']=') and is_var(instr[0]):
-            tainted_var = instr[0].split('_')[0]
-            if tainted_var in useful_regs:
-                tainted_vars_map[tainted_var] = instr[0]
-    tainted_vars.update(tainted_vars_map.values())
+            if instr[0] in useful_regs:
+                tainted_vars.add(instr[0])
     # find vars which write to memory
     for instr in instrs:
         if instr[1].endswith(']='):
@@ -315,12 +312,14 @@ def sa_dead_code_elim(instrs, useful_regs):
     return instrs_new
 
 
-def block_simplify(block, useful_regs=(
-    'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
-    'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of',
-)):
-    instrs = block.instrs
-    instrs = sa_to_ssa(instrs)
+def block_simplify(block, useful_regs=None):
+    instrs, cond = block.instrs, block.condition
+    useful_regs = useful_regs or (
+        'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi', 'eip',
+        'cf', 'pf', 'af', 'zf', 'sf', 'tf', 'df', 'of', *((cond,) if cond else ())
+    )
+    instrs, var_map_ssa = sa_to_ssa(instrs)
+    useful_regs = [var_map_ssa[reg] for reg in useful_regs if reg in var_map_ssa]
     while True:
         prev_len = len(instrs)
         instrs = sa_expr_simp(instrs)
@@ -332,5 +331,6 @@ def block_simplify(block, useful_regs=(
         instrs = sa_dead_code_elim(instrs, useful_regs)
         if len(instrs) == prev_len:
             break
-    instrs = ssa_to_sa(instrs)
+    instrs, var_map_sa = ssa_to_sa(instrs)
     block.instrs = instrs
+    block.condition = cond and var_map_sa.get(var_map_ssa[cond], var_map_ssa[cond])

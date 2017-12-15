@@ -99,27 +99,27 @@ with description('sa_to_ssa'):
             ('eax', '=', '+', 'eax', 'ecx'),
             ('ebx', '=', 'eax'),
             ('eax', '=', 'ebx'),
-        ])).to(equal([
+        ])).to(equal(([
             ('eax_1', '=', '+', 'eax_0', 'ecx_0'),
             ('ebx_1', '=', 'eax_1'),
             ('eax_2', '=', 'ebx_1'),
-        ]))
+        ], {'eax': 'eax_2', 'ebx': 'ebx_1', 'ecx': 'ecx_0'})))
 
     with it('works with subwords'):
         expect(sa_to_ssa([
             ('al', 'x=', 'eax'),
-        ])).to(equal([
+        ])).to(equal(([
             ('al_1', 'x=', 'eax_0'),
-        ]))
+        ], {'al': 'al_1', 'eax': 'eax_0'})))
 
     with it('recounts all names'):
         expect(sa_to_ssa([
             ('tmp_3', '=', 'tmp_2'),
             ('tmp', '=', 'tmp_3'),
-        ])).to(equal([
+        ])).to(equal(([
             ('tmp_1', '=', 'tmp_0'),
             ('tmp_2', '=', 'tmp_1'),
-        ]))
+        ], {'tmp': 'tmp_2', 'tmp_2': 'tmp_0', 'tmp_3': 'tmp_1'})))
 
 with description('ssa_to_sa'):
     with it('recounts & remove counters from initial & final registers'):
@@ -128,12 +128,12 @@ with description('ssa_to_sa'):
             ('ebx_1', '[]=', 'eax_2'),
             ('ebx_2', '=', 'eax_2'),
             ('eax_3', '=', 'ebx_2'),
-        ])).to(equal([
+        ])).to(equal(([
             ('eax_1', '=', '+', 'eax', 'ecx'),
             ('ebx', '[]=', 'eax_1'),
             ('ebx', '=', 'eax_1'),
             ('eax', '=', 'ebx'),
-        ]))
+        ], {'eax_1': 'eax', 'eax_2': 'eax_1', 'eax_3': 'eax', 'ebx_1': 'ebx', 'ebx_2': 'ebx', 'ecx_1': 'ecx'})))
 
 with description('sa_expr_simp'):
     with it('simplifies xor same register to 0'):
@@ -345,7 +345,7 @@ with description('sa_dead_code_elim'):
             ('r_1', '=', 'r_0'),
             ('s_0', '=', 'r_1'),
             ('t_0', '=', 'r_1'),
-        ], ['s'])).to(equal([
+        ], ['s_0'])).to(equal([
             ('r_0', '=', 1),
             ('r_1', '=', 'r_0'),
             ('s_0', '=', 'r_1'),
@@ -367,10 +367,11 @@ with description('sa_dead_code_elim'):
 
 with description('block_simplify'):
     with it('converts to and from ssa form'):
-        with patch('analysis.block.sa_to_ssa') as sa_to_ssa_, patch('analysis.block.ssa_to_sa') as ssa_to_sa_:
+        with patch('analysis.block.sa_to_ssa', side_effect=[([], {})]) as sa_to_ssa_, \
+                patch('analysis.block.ssa_to_sa', side_effect=[([], {})]) as ssa_to_sa_:
             block_simplify(Block())
-            expect(sa_to_ssa_.call_count).to(be(1))
-            expect(ssa_to_sa_.call_count).to(be(1))
+            expect(sa_to_ssa_.call_count).to(equal(1))
+            expect(ssa_to_sa_.call_count).to(equal(1))
 
     with it('repeatedly calls simplification routines until the lengths of instructions stay constant'):
         with ExitStack() as stack:
@@ -389,5 +390,11 @@ with description('block_simplify'):
             ])
             block_simplify(block)
             for sa_simp in sa_simps:
-                expect(sa_simp.call_count).to(be(3))
-            expect(len(block.instrs)).to(be(2))
+                expect(sa_simp.call_count).to(equal(3))
+            expect(len(block.instrs)).to(equal(2))
+
+    with it('maps block condition'):
+        block = Block(instrs=[('tmp_2', '=', 0), ('tmp_3', '=', 1)])
+        block.condition = 'tmp_3'
+        block_simplify(block)
+        expect(block.condition).to(equal('tmp_1'))
