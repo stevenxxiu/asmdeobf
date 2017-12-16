@@ -285,7 +285,7 @@ class DisjunctConstConstraint:
         '''
         block = Block(instrs=self.flag_instrs)
         block.condition = var
-        block_simplify(block, (block.condition,))
+        block_simplify(block, (block.condition,))  # simplify to improve speed
         self.flag_instrs.clear()
         res_cons = []
         for const_con in self.const_cons:
