@@ -1,6 +1,6 @@
 from contextlib import ExitStack
 from textwrap import dedent
-from unittest.mock import patch, PropertyMock
+from unittest.mock import patch
 
 from expects import *
 

@@ -4,7 +4,6 @@ from expects import *
 
 from analysis.constraint import ConstConstraint, DisjunctConstConstraint
 from analysis.specs._stub import *
-from analysis.specs._utils import to_blocks
 from analysis.winapi import win_api
 
 with description('ConstConstraint'):

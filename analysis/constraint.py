@@ -1,8 +1,7 @@
-import itertools
 from collections import defaultdict
 from copy import deepcopy
 
-from analysis.block import block_simplify, Block
+from analysis.block import Block, block_simplify
 from analysis.utils import MemValues, is_var
 from analysis.winapi import win_api
 
