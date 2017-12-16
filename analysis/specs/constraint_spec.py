@@ -306,32 +306,23 @@ with description('ConstConstraint'):
             expect(self.c.mem.values).to(equal({}))
 
 with description('DisjunctConstConstraint'):
-    with description('from_predicate'):
+    with description('add_predicate'):
         with it('solves a branching constraint'):
-            block = to_blocks([{'instrs': [
-                ('tmp_0', '=', '^', 'of', 'sf'),
-                ('tmp_1', '=', '|', 'tmp_0', 'zf'),
-            ], 'condition': 'tmp_1'}])[0]
-            expect(DisjunctConstConstraint.from_predicate(block, 1)).to(equal(DisjunctConstConstraint([
-                ConstConstraint({'sf': 0, 'of': 1}),
-                ConstConstraint({'sf': 1, 'of': 0}),
-                ConstConstraint({'zf': 1, 'sf': 0, 'of': 0}),
-                ConstConstraint({'zf': 1, 'sf': 1, 'of': 1}),
+            cons = DisjunctConstConstraint([ConstConstraint({'zf': 1}), ConstConstraint({'of': 1})])
+            cons.step(('sf', '=', 'zf'))
+            cons.step(('tmp_0', '=', '^', 'of', 'sf'))
+            cons.step(('tmp_1', '=', '|', 'tmp_0', 'zf'))
+            cons.solve('tmp_1', 1)
+            expect(cons).to(equal(DisjunctConstConstraint([
+                ConstConstraint({'zf': 1, 'sf': 1}),
+                ConstConstraint({'of': 1, 'sf': 0}),
+                ConstConstraint({'of': 1, 'sf': 1, 'zf': 1}),
             ])))
 
-        with it('does not modify the original block'):
-            block = to_blocks([{'instrs': [
-                ('tmp_0', '=', 1),
-                ('tmp_1', '=', 1),
-            ], 'condition': 'tmp_0'}])[0]
-            DisjunctConstConstraint.from_predicate(block, 1)
-            expect(len(block.instrs)).to(equal(2))
-
         with it('raises ValueError if the branch is dependent on more than flags'):
-            block = to_blocks([{'instrs': [
-                ('tmp_0', '=', 'eax'),
-            ], 'condition': 'tmp_0'}])[0]
-            expect(lambda: DisjunctConstConstraint.from_predicate(block, 1)).to(raise_error(ValueError))
+            cons = DisjunctConstConstraint([ConstConstraint()])
+            cons.step(('tmp_0', '=', 'eax'))
+            expect(lambda: cons.solve('tmp_0', 1)).to(raise_error(ValueError))
 
     with description('_expand_constraints'):
         with it('expands None'):

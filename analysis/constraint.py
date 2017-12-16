@@ -2,7 +2,7 @@ import itertools
 from collections import defaultdict
 from copy import deepcopy
 
-from analysis.block import block_simplify
+from analysis.block import block_simplify, Block
 from analysis.utils import MemValues, is_var
 from analysis.winapi import win_api
 
@@ -51,11 +51,6 @@ class ConstConstraint:
         for name, val in {'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'tf': 0, 'df': 0, 'of': 0}.items():
             self.vars[name] = val
         return self
-
-    def finalize(self):
-        for name in list(self.vars):
-            if name not in self.bits:
-                self.vars.pop(name)
 
     def widen(self, other):
         if self.mem_var != other.mem_var:
@@ -217,6 +212,11 @@ class ConstConstraint:
         else:
             self.stack.invalidate()
 
+    def finalize(self):
+        for name in list(self.vars):
+            if name not in self.bits:
+                self.vars.pop(name)
+
 
 class DisjunctConstConstraint:
     '''
@@ -227,6 +227,7 @@ class DisjunctConstConstraint:
 
     def __init__(self, const_cons=None):
         self.const_cons = const_cons or []
+        self.flag_instrs = []
 
     def __eq__(self, other):
         return self.const_cons == other.const_cons
@@ -234,27 +235,6 @@ class DisjunctConstConstraint:
     @staticmethod
     def from_oep():
         return DisjunctConstConstraint([ConstConstraint.from_oep()])
-
-    @classmethod
-    def from_predicate(cls, block, value):
-        '''
-        Brute-forces all flags to solve the constraint.
-        '''
-        tuple_cons = []
-        block = deepcopy(block)
-        block_simplify(block, (block.condition,))
-        for values in itertools.product((0, 1), repeat=len(cls.flags)):
-            constraint = ConstConstraint(dict(zip(cls.flags, values)))
-            for instr in block.instrs:
-                constraint.step(instr)
-            if block.condition not in constraint.vars:
-                raise ValueError(f'could not evaluate {block.condition} to a const')
-            if constraint.vars[block.condition] == value:
-                tuple_cons.append(values)
-        tuple_cons = cls._reduce_constraints(tuple_cons)
-        return DisjunctConstConstraint([ConstConstraint({
-            key: val for key, val in zip(cls.flags, con) if val is not None
-        }) for con in tuple_cons])
 
     @staticmethod
     def _expand_constraints(tuple_cons):
@@ -282,7 +262,53 @@ class DisjunctConstConstraint:
                 tuple_cons.append(rest_val[:i] + (flag_vals[0] if len(flag_vals) == 1 else None,) + rest_val[i:])
         return tuple_cons
 
-    def finalize(self, tuple_cons=None):
+    def widen(self, other):
+        self.const_cons.extend(other.const_constraints)
+        self.finalize()
+
+    def step(self, instr):
+        if instr[0] not in self.flags:
+            self.flag_instrs.append(instr)
+        for con in self.const_cons:
+            con.step(instr)
+
+    def step_api_jmp(self, lib_name, api_name):
+        for con in self.const_cons:
+            con.step_api_jmp(lib_name, api_name)
+
+    def solve(self, var, value):
+        '''
+        Find the constraint at the end so that var == value.
+
+        The solver here brute-forces all flag values, and assumes that they are not modified after being used to
+        evaluate the condition.
+        '''
+        block = Block(instrs=self.flag_instrs)
+        block.condition = var
+        block_simplify(block, (block.condition,))
+        self.flag_instrs.clear()
+        res_cons = []
+        for const_con in self.const_cons:
+            res_tuple_cons = []
+            tuple_cons = self._expand_constraints([tuple(const_con.vars.get(flag, None) for flag in self.flags)])
+            for tuple_con in tuple_cons:
+                solve_con = ConstConstraint(dict(zip(self.flags, tuple_con)))
+                for instr in block.instrs:
+                    solve_con.step(instr)
+                if block.condition not in solve_con.vars:
+                    raise ValueError(f'could not evaluate {block.condition} to a const')
+                if solve_con.vars[block.condition] == value:
+                    res_tuple_cons.append(tuple_con)
+            res_tuple_cons = self._reduce_constraints(res_tuple_cons)
+            for tuple_con in res_tuple_cons:
+                res_con = deepcopy(const_con)
+                for flag, val in zip(self.flags, tuple_con):
+                    if val is not None:
+                        res_con.vars[flag] = val
+                res_cons.append(res_con)
+        self.const_cons = res_cons
+
+    def finalize(self):
         # XXX only allow the flags to vary, and detect any flag variations
         flag_constraints = []
         # for constraint in self.const_constraints:
@@ -293,15 +319,3 @@ class DisjunctConstConstraint:
         non_flags = ConstConstraint()
 
         pass
-
-    def widen(self, other):
-        self.const_cons.extend(other.const_constraints)
-        self.finalize()
-
-    def step(self, instr):
-        for con in self.const_cons:
-            con.step(instr)
-
-    def step_api_jmp(self, lib_name, api_name):
-        for cons in self.const_cons:
-            cons.step_api_jmp(lib_name, api_name)
