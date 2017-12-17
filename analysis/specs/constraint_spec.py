@@ -305,7 +305,11 @@ with description('ConstConstraint'):
             expect(self.c.mem.values).to(equal({}))
 
 with description('DisjunctConstConstraint'):
-    with description('add_predicate'):
+    with it('initializes from oep'):
+        cons = DisjunctConstConstraint.from_oep()
+        expect(cons.const_cons).to(equal([ConstConstraint.from_oep()]))
+
+    with description('solve'):
         with it('solves a branching constraint'):
             cons = DisjunctConstConstraint([ConstConstraint({'zf': 1}), ConstConstraint({'of': 1})])
             cons.step(('sf', '=', 'zf'))
@@ -334,7 +338,52 @@ with description('DisjunctConstConstraint'):
     with description('_reduce_constraints'):
         with it('reduces to None'):
             expect(DisjunctConstConstraint._reduce_constraints([
-                (0, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1),
+                (0, 0, 0), (0, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1),
             ])).to(equal([
                 (None, 0, None),
             ]))
+
+    with description('widens'):
+        with it('merges and finalizes'):
+            c = DisjunctConstConstraint([ConstConstraint({'eax': 1, 'tmp': 2})])
+            c.widen(DisjunctConstConstraint([ConstConstraint({'eax': 1, 'tmp': 2})]))
+            c.finalize()
+            expect(c).to(equal(DisjunctConstConstraint([
+                ConstConstraint({'eax': 1}),
+            ])))
+
+    with description('step_api_jmp'):
+        with it('calls step_api_jmp for each const constraint'):
+            with patch('analysis.constraint.ConstConstraint.step_api_jmp') as step_api_jmp:
+                c = DisjunctConstConstraint([ConstConstraint({'eax': 1}), ConstConstraint({'eax': 2})])
+                c.step_api_jmp('some_lib', 'some_method')
+                expect(step_api_jmp.call_count).to(equal(2))
+
+    with description('finalize'):
+        with it('works with empty constraints'):
+            c = DisjunctConstConstraint([])
+            c.finalize()
+            expect(c).to(equal(DisjunctConstConstraint([])))
+
+        with it('widens all non-flag constraints'):
+            c = DisjunctConstConstraint([
+                ConstConstraint({'eax': 1, 'ebx': 2}),
+                ConstConstraint({'eax': 1, 'ebx': 3}),
+            ])
+            c.finalize()
+            expect(c).to(equal(DisjunctConstConstraint([
+                ConstConstraint({'eax': 1}),
+            ])))
+
+        with it('reduces all flags constraints'):
+            c = DisjunctConstConstraint([
+                ConstConstraint({'zf': 1, 'sf': 0}),
+                ConstConstraint({'zf': 1, 'sf': 0}),
+                ConstConstraint({'zf': 1, 'sf': 1}),
+                ConstConstraint({'of': 1}),
+            ])
+            c.finalize()
+            expect(c).to(equal(DisjunctConstConstraint([
+                ConstConstraint({'of': 0, 'zf': 1}),
+                ConstConstraint({'of': 1}),
+            ])))

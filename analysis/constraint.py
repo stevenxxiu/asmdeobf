@@ -253,16 +253,16 @@ class DisjunctConstConstraint:
     def _reduce_constraints(tuple_cons):
         # go through each flag
         for i in range(len(tuple_cons[0])):
-            rest_dups = defaultdict(list)
+            rest_dups = defaultdict(set)
             for con in tuple_cons:
-                rest_dups[con[:i] + con[i + 1:]].append(con[i])
+                rest_dups[con[:i] + con[i + 1:]].add(con[i])
             tuple_cons = []
             for rest_val, flag_vals in rest_dups.items():
-                tuple_cons.append(rest_val[:i] + (flag_vals[0] if len(flag_vals) == 1 else None,) + rest_val[i:])
+                tuple_cons.append(rest_val[:i] + (flag_vals.pop() if len(flag_vals) == 1 else None,) + rest_val[i:])
         return tuple_cons
 
     def widen(self, other):
-        self.const_cons.extend(other.const_constraints)
+        self.const_cons.extend(other.const_cons)
         self.finalize()
 
     def step(self, instr):
@@ -298,23 +298,24 @@ class DisjunctConstConstraint:
                     raise ValueError(f'could not evaluate {block.condition} to a const')
                 if solve_con.vars[block.condition] == value:
                     res_tuple_cons.append(tuple_con)
-            res_tuple_cons = self._reduce_constraints(res_tuple_cons)
-            for tuple_con in res_tuple_cons:
+            for tuple_con in self._reduce_constraints(res_tuple_cons):
                 res_con = deepcopy(const_con)
-                for flag, val in zip(self.flags, tuple_con):
-                    if val is not None:
-                        res_con.vars[flag] = val
+                res_con.vars.update({flag: val for flag, val in zip(self.flags, tuple_con) if val is not None})
                 res_cons.append(res_con)
         self.const_cons = res_cons
 
     def finalize(self):
-        # XXX only allow the flags to vary, and detect any flag variations
-        flag_constraints = []
-        # for constraint in self.const_constraints:
-        #     flag_constraints.append({flag: const for flag in })
-
-        # XXX just go through every flag combo with the constraint since from_predicate does it anyway
-
-        non_flags = ConstConstraint()
-
-        pass
+        if not self.const_cons:
+            return
+        tuple_cons = []
+        for const_con in self.const_cons:
+            tuple_cons.append(tuple(const_con.vars.pop(flag, None) for flag in self.flags))
+        const_widen = self.const_cons[0]
+        for const_con in self.const_cons[1:]:
+            const_widen.widen(const_con)
+        const_widen.finalize()
+        self.const_cons = []
+        for tuple_con in self._reduce_constraints(self._expand_constraints(tuple_cons)):
+            res_con = deepcopy(const_widen)
+            res_con.vars.update({flag: val for flag, val in zip(self.flags, tuple_con) if val is not None})
+            self.const_cons.append(res_con)
