@@ -81,26 +81,26 @@ with description('ConstConstraint'):
         with description('op'):
             with it('evals integer'):
                 self.c.step(('eax', '=', 1))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
 
             with it('evals variable'):
                 self.c.vars['eax'] = 1
                 self.c.step(('ebx', '=', 'eax'))
-                expect(self.c.vars['ebx']).to(equal(1))
+                expect(self.c.vars).to(have_key('ebx', 1))
 
             with it('evals $bxxx to 1 when there is borrow'):
                 self.c.step(('eax', '=', '$b8', 0))
-                expect(self.c.vars['eax']).to(equal(0))
+                expect(self.c.vars).to(have_key('eax', 0))
                 self.c.step(('eax', '=', '$b8', -1))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
                 self.c.step(('eax', '=', '$b8', 0x1ff))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
 
             with it('sets $cxxx to 1 when there is borrow'):
                 self.c.step(('eax', '=', '$c7', 0))
-                expect(self.c.vars['eax']).to(equal(0))
+                expect(self.c.vars).to(have_key('eax', 0))
                 self.c.step(('eax', '=', '$c7', 0x1ff))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
 
             with it('does nothing for $p'):
                 self.c.step(('eax', '=', '$p', 0))
@@ -108,14 +108,14 @@ with description('ConstConstraint'):
 
             with it('sets $zf on integer'):
                 self.c.step(('eax', '=', '$z', 0))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
                 self.c.step(('eax', '=', '$z', 1))
-                expect(self.c.vars['eax']).to(equal(0))
+                expect(self.c.vars).to(have_key('eax', 0))
 
             with it('sets $zf to 0 when value involves `esp_0 + const`'):
                 self.c.vars['esp'] = ('esp_0', 0)
                 self.c.step(('eax', '=', '$z', 'esp'))
-                expect(self.c.vars['eax']).to(equal(0))
+                expect(self.c.vars).to(have_key('eax', 0))
 
             with it('does nothing for $s'):
                 self.c.step(('eax', '=', '$s', 0))
@@ -127,55 +127,55 @@ with description('ConstConstraint'):
 
             with it('negates boolean for !'):
                 self.c.step(('eax', '=', '!', 0))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
                 self.c.step(('eax', '=', '!', 1))
-                expect(self.c.vars['eax']).to(equal(0))
+                expect(self.c.vars).to(have_key('eax', 0))
 
             with description('and'):
                 with it('ands integer vars'):
                     self.c.step(('eax', '=', '&', 0x12, 0x34))
-                    expect(self.c.vars['eax']).to(equal(0x10))
+                    expect(self.c.vars).to(have_key('eax', 0x10))
 
             with description('or'):
                 with it('ors integer vars'):
                     self.c.step(('eax', '=', '|', 0x12, 0x34))
-                    expect(self.c.vars['eax']).to(equal(0x36))
+                    expect(self.c.vars).to(have_key('eax', 0x36))
 
             with description('xor'):
                 with it('xors integer vars'):
                     self.c.step(('eax', '=', '^', 0x12, 0x34))
-                    expect(self.c.vars['eax']).to(equal(0x26))
+                    expect(self.c.vars).to(have_key('eax', 0x26))
 
                 with it('clears var when xoring with same value'):
                     self.c.step(('eax', '=', '^', 'eax', 'eax'))
-                    expect(self.c.vars['eax']).to(equal(0))
+                    expect(self.c.vars).to(have_key('eax', 0))
 
             with description('add'):
                 with it('adds integer vars'):
                     self.c.step(('eax', '=', '+', 1, 2))
-                    expect(self.c.vars['eax']).to(equal(3))
+                    expect(self.c.vars).to(have_key('eax', 3))
 
                 with it('adds mem offsets'):
                     self.c.vars['esp'] = ('esp_0', 0)
                     self.c.step(('eax', '=', '+', 'esp', 1))
-                    expect(self.c.vars['eax']).to(equal(('esp_0', 1)))
+                    expect(self.c.vars).to(have_key('eax', ('esp_0', 1)))
                     self.c.step(('eax', '=', '+', 1, 'esp'))
-                    expect(self.c.vars['eax']).to(equal(('esp_0', 1)))
+                    expect(self.c.vars).to(have_key('eax', ('esp_0', 1)))
 
             with description('sub'):
                 with it('subs integer vars'):
                     self.c.step(('eax', '=', '-', 2, 1))
-                    expect(self.c.vars['eax']).to(equal(1))
+                    expect(self.c.vars).to(have_key('eax', 1))
 
                 with it('subs mem offsets'):
                     self.c.vars['esp'] = ('esp_0', 2)
                     self.c.step(('eax', '=', '-', 'esp', 1))
-                    expect(self.c.vars['eax']).to(equal(('esp_0', 1)))
+                    expect(self.c.vars).to(have_key('eax', ('esp_0', 1)))
 
             with description('mul'):
                 with it('muls integer vars'):
                     self.c.step(('eax', '=', '*', 2, 3))
-                    expect(self.c.vars['eax']).to(equal(6))
+                    expect(self.c.vars).to(have_key('eax', 6))
 
             with it('raises ValueError on unknown op'):
                 expect(lambda: self.c.step(('eax', '=', '??', 'ebx'))).to(raise_error(ValueError))
@@ -183,16 +183,16 @@ with description('ConstConstraint'):
         with description('assign'):
             with it('mods integer values if they are from registers'):
                 self.c.step(('al_0', '=', (1 << 8) + 1))
-                expect(self.c.vars['al_0']).to(equal(1))
+                expect(self.c.vars).to(have_key('al_0', 1))
 
             with it('does not mod values that are not from registers'):
                 self.c.step(('temp_0', '=', (1 << 8) + 1))
-                expect(self.c.vars['temp_0']).to(equal((1 << 8) + 1))
+                expect(self.c.vars).to(have_key('temp_0', (1 << 8) + 1))
 
             with it('assigns mem offsets'):
                 self.c.vars['esp'] = ('esp_0', 0)
                 self.c.step(('eax', '=', 'esp'))
-                expect(self.c.vars['eax']).to(equal(('esp_0', 0)))
+                expect(self.c.vars).to(have_key('eax', ('esp_0', 0)))
 
             with it('removes non-constants'):
                 self.c.step(('eax', '=', 'ebx'))
@@ -202,13 +202,13 @@ with description('ConstConstraint'):
             with it('assigns when parent register and value are integers'):
                 self.c.vars['eax'] = 0xffffffff
                 self.c.step(('eax', 'l=', 1))
-                expect(self.c.vars['eax']).to(equal(0xffffff01))
+                expect(self.c.vars).to(have_key('eax', 0xffffff01))
                 self.c.vars['eax'] = 0xffffffff
                 self.c.step(('eax', 'h=', 1))
-                expect(self.c.vars['eax']).to(equal(0xffff01ff))
+                expect(self.c.vars).to(have_key('eax', 0xffff01ff))
                 self.c.vars['eax'] = 0xffffffff
                 self.c.step(('eax', 'x=', 1))
-                expect(self.c.vars['eax']).to(equal(0xffff0001))
+                expect(self.c.vars).to(have_key('eax', 0xffff0001))
 
             with it('removes non-integers'):
                 self.c.step(('eax', 'x=', 1))
@@ -217,11 +217,11 @@ with description('ConstConstraint'):
         with description('assign to sub-register'):
             with it('assigns when value is an integer'):
                 self.c.step(('al', '=l', 0x01020304))
-                expect(self.c.vars['al']).to(equal(0x04))
+                expect(self.c.vars).to(have_key('al', 0x04))
                 self.c.step(('ah', '=h', 0x01020304))
-                expect(self.c.vars['ah']).to(equal(0x03))
+                expect(self.c.vars).to(have_key('ah', 0x03))
                 self.c.step(('ax', '=x', 0x01020304))
-                expect(self.c.vars['ax']).to(equal(0x0304))
+                expect(self.c.vars).to(have_key('ax', 0x0304))
 
             with it('removes non-integers'):
                 self.c.vars['esp'] = ('esp_0', 0)
@@ -233,12 +233,12 @@ with description('ConstConstraint'):
                 self.c.vars['esp'] = ('esp_0', 0)
                 self.c.stack.values[(0, 4)] = 1
                 self.c.step(('eax', '=[4]', 'esp'))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
 
             with it('reads from memory'):
                 self.c.mem.values[(0, 4)] = 1
                 self.c.step(('eax', '=[4]', 0))
-                expect(self.c.vars['eax']).to(equal(1))
+                expect(self.c.vars).to(have_key('eax', 1))
 
             with it('does not read from memory when mem var is different'):
                 self.c.vars['eax'] = ('eax_0', 0)
@@ -284,7 +284,7 @@ with description('ConstConstraint'):
         with it('updates esp'):
             self.c.vars['esp'] = ('esp_0', 0)
             self.c.step_api_jmp('some_lib', 'some_method')
-            expect(self.c.vars['esp']).to(equal(('esp_0', 4)))
+            expect(self.c.vars).to(have_key('esp', ('esp_0', 4)))
 
         with it('invalidates overlapping stack values since can be changed by call'):
             self.c.stack.values[(-5, 4)] = 1

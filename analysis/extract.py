@@ -1,9 +1,6 @@
 import re
 
-from sympy import Symbol, sympify
-
 from analysis.block import Block
-from analysis.constraint import ConstConstraint
 from analysis.func import Function
 
 
@@ -15,51 +12,46 @@ class FuncExtract:
         self.start_constraint = constraint
         self.end_constraint = None
         self.end_addrs = set(end_addrs)
+        self.initial_vars = {}
 
         self.addr_to_constraint = {}  # {addr: constraint}
         self.addr_to_block = {}  # {addr: (block, i)}
-        self.block_to_addr = {}  # {(block, i): addr}
         self.stack = []  # [(addr, state)]
-        self.esp_0 = None
 
-    def extract_esil(self, addr):
-        # update eip to facilitate analysis of conditional jmps and call
+    def _extract_esil(self, addr):
+        # update eip so the instruction is more complete for conditional jmps and call
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}'
 
-    def block_append_instr(self, block, addr, instr):
-        self.addr_to_block[addr] = (block, len(block.instrs))
-        self.block_to_addr[(id(block), len(block.instrs))] = addr
-        block.instrs.append(instr)
+    def _eval_cons_val(self, val):
+        return val if isinstance(val, int) else self.initial_vars[val[0]] + val[1]
 
-    def stack_append(self, addr, constraint_):
+    def _update_radare_state(self, con):
+        con = con.const_cons[0]
+        for name, val in con.vars.items():
+            self.r.cmd(f'aer {name}={self._eval_cons_val(val)}')
+        for (offset, size), val in con.stack.values.items():
+            self.r.cmd(f'ae {self._eval_cons_val(val)},{self.initial_vars["esp_0"] + offset},=[{size}]')
+        mem_base = con.mem_var and self.initial_vars[con.mem_var]
+        for (offset, size), val in con.mem.values.items():
+            self.r.cmd(f'ae {self._eval_cons_val(val)},{mem_base + offset},=[{size}]')
+
+    def _stack_append(self, addr, constraint_):
         self.stack.append((addr, constraint_))
         self.addr_to_constraint[addr] = constraint_
 
-    def extract_block(self, cur_addr, constraint):
-        constraint.regs['eip'] = sympify(cur_addr)
-        state = constraint.to_state(self.names)
+    def _extract_block(self, cur_addr, con):
+        con.step(('eip', '=', cur_addr))
+        self._update_radare_state(con)
         block = Block()
-
-        # update radare state
-        for name, val in state.regs.items():
-            val = val.subs(Symbol('esp_0'), self.esp_0)
-            if not name.startswith('$') and val.is_Integer:
-                self.r.cmd(f'aer {name}={val}')
-        for (offset, size), val in state.stack.values.items():
-            if val.is_Integer:
-                self.r.cmd(f'ae {val},{self.esp_0 + offset},=[{size}]')
-        self.r.cmd(f's {cur_addr}')
-        self.r.cmd('aeip')
-
         while True:
-            cur_addr = state.regs['eip']
+            cur_addr = state.vars['eip']
             if not cur_addr.is_Integer or cur_addr in self.end_addrs:
-                constraint = ConstConstraint.from_state(state)
+                con = ConstConstraint.from_state(state)
                 if self.end_constraint is None:
-                    self.end_constraint = constraint
+                    self.end_constraint = con
                 else:
-                    self.end_constraint.widen(constraint)
+                    self.end_constraint.widen(con)
                 break
             cur_addr = int(cur_addr)
 
@@ -67,17 +59,15 @@ class FuncExtract:
             if cur_addr in self.addr_to_block:
                 block.children = [cur_addr]
                 block, i = self.addr_to_block[cur_addr]
-                constraint = ConstConstraint.from_state(state)
+                con = ConstConstraint.from_state(state)
                 prev_constraint = self.addr_to_constraint[self.block_to_addr[(id(block), 0)]]
                 if i == 0:
-                    constraint.widen(prev_constraint)
-                if i != 0 or constraint != prev_constraint:
+                    con.widen(prev_constraint)
+                if i != 0 or con != prev_constraint:
                     # remove old block
                     addrs = []
                     for j in range(len(block.instrs)):
-                        addrs.append(self.block_to_addr[(id(block), j)])
                         self.addr_to_block.pop(addrs[-1])
-                        self.block_to_addr.pop((id(block), j))
 
                     # add new block (slice of old block until i)
                     new_block = Block(children=[cur_addr])
@@ -88,27 +78,27 @@ class FuncExtract:
                     prev_state = prev_constraint.to_state(self.names)
                     for instr in block.instrs[:i]:
                         prev_state.step(instr)
-                    constraint.widen(prev_constraint)
-                    self.stack_append(cur_addr, constraint)
+                    con.widen(prev_constraint)
+                    self._stack_append(cur_addr, con)
                 break
 
             # append instruction
-            instr = self.extract_esil(cur_addr)
+            instr = self._extract_esil(cur_addr)
             self.block_append_instr(block, cur_addr, instr)
 
             # check if we have a conditional jmp
             matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
             if matches:
                 flag = matches.group(2)
-                if not state.regs[flag].is_Integer:
+                if not state.vars[flag].is_Integer:
                     is_negated = bool(matches.group(3))
                     # explore remaining code first before exploring jmp
-                    constraint = ConstConstraint.from_state(state)
-                    constraint.regs[flag] = sympify(int(not is_negated))
-                    self.stack_append(int(matches.group(4)), constraint)
-                    constraint = ConstConstraint.from_state(state)
-                    constraint.regs[flag] = sympify(int(is_negated))
-                    self.stack_append(int(matches.group(1)), constraint)
+                    con = ConstConstraint.from_state(state)
+                    con.vars[flag] = sympify(int(not is_negated))
+                    self._stack_append(int(matches.group(4)), con)
+                    con = ConstConstraint.from_state(state)
+                    con.vars[flag] = sympify(int(is_negated))
+                    self._stack_append(int(matches.group(1)), con)
                     block.condition = (flag, int(is_negated))
                     block.children = [int(matches.group(4)), int(matches.group(1))]
                     break
@@ -125,7 +115,7 @@ class FuncExtract:
                         # end current block to aid in de-obfuscation
                         lib_name, api_name = matches.group(1), matches.group(2)
                         state.step_api_jmp(lib_name, api_name)
-                        self.stack_append(int(ret_addr), state)
+                        self._stack_append(int(ret_addr), state)
                         block.children = [int(ret_addr)]
                         break
 
@@ -136,12 +126,12 @@ class FuncExtract:
             self.r.cmd('aes')
 
     def extract(self):
-        self.stack_append(self.start_addr, self.start_constraint)
+        self._stack_append(self.start_addr, self.start_constraint)
         self.r.cmd('aei')
         self.r.cmd('aeim')
-        self.esp_0 = self.r.cmdj(f'aerj')['esp']
+        self.initial_vars = {f'{key}_0': val for key, val in self.r.cmdj(f'aerj')}
         while self.stack:
-            self.extract_block(*self.stack.pop())
+            self._extract_block(*self.stack.pop())
         addrs = {self.start_addr}
         for block, i in self.addr_to_block.values():
             addrs.update(block.children)
