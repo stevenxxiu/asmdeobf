@@ -211,7 +211,7 @@ class ESILToFunc:
         for block in func.blocks:
             block.instrs = self._sa_include_flag_deps(block.instrs)
             block.instrs = self._sa_include_subword_deps(block.instrs)
-        return func, end_block
+        return func
 
 
 def func_remove_same_children(func):
