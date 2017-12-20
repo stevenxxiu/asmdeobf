@@ -34,9 +34,11 @@ In order to identify functions, we look at calls which have relatively large off
 De-obfuscation is done on the CFG, as well as block-by-block.
 
 # Self-modifying code
-The analysis supposes the program does not modify itself, although self-modifying instructions are still run through the radare emulator.
+The analysis supposes the program does not modify itself.
 
-If this is not the case for some parts of the program, we will provide an api to let the user hook addresses so fixed code can become some user-specified code to be handed to the analyzer.
+Decryption loops can be emulated outside of the static analyzer.
+
+For self-modifying conditions, we will provide an api to let the user hook addresses so fixed code can become some user-specified code to be handed to the analyzer.
 
 # Other tools
 Radeco only works on linux and is not aimed particularly at de-obfuscation. For convenience of python we code own ssa form/simplification routines.
