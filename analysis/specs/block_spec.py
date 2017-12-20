@@ -20,7 +20,7 @@ with description('Block'):
                 ('eax', '=', '+', 'ebx', 1),
             ]))).to(equal(dedent('''
                 eax = 0x1
-                eax = !0x1
+                eax = ! 0x1
                 eax = ebx + 0x1
             ''').strip()))
 

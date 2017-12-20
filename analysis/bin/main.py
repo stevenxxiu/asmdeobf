@@ -3,7 +3,7 @@ import r2pipe
 from analysis.block import block_simplify
 from analysis.constraint import ConstConstraint
 from analysis.emu import update_radare_state
-from analysis.extract import FuncsExtract
+from analysis.extract import extract_funcs
 from analysis.func import func_simplify
 
 
@@ -14,13 +14,13 @@ def process_funcs(funcs):
 
     # de-obfuscate blocks
     for func in funcs:
-        for block in func.blocks.values():
+        for block in func.block.dfs():
             block_simplify(block)
 
     # pretty-print
     for func in funcs:
         print(f'sub_{func.addr:08x}')
-        for block_addr, block in sorted(func.blocks.items()):
+        for block in func.block.dfs():
             print(f'block_{block_addr:08x}')
             print(block)
             if block.condition:
@@ -44,21 +44,21 @@ def main():
         initial_vars = r.cmdj(f'aerj')
 
         # first decrypt loop
-        funcs = FuncsExtract(r).extract_funcs(0x00401BB4, ConstConstraint.from_oep(), end_addrs=(0x00401D6C,))
+        funcs = extract_funcs(r, 0x00401BB4, ConstConstraint.from_oep(), end_addrs=(0x00401D6C,))
         update_radare_state(r, funcs[0x00401BB4][1], initial_vars)
         r.cmd('e.aecu 0x00401D6C')
 
         # code
-        funcs = FuncsExtract(r).extract_funcs(0x00401D6C, funcs[0x00401BB4][1], end_addrs=(0x00401D77,))
+        funcs = extract_funcs(r, 0x00401D6C, funcs[0x00401BB4][1], end_addrs=(0x00401D77,))
         process_funcs(funcs)
 
         # second decrypt loop
-        funcs = FuncsExtract(r).extract_funcs(0x00401D77, funcs[0x00401D6C][1], end_addrs=(0x00401DC7,))
+        funcs = extract_funcs(r, 0x00401D77, funcs[0x00401D6C][1], end_addrs=(0x00401DC7,))
         update_radare_state(r, funcs[0x00401D77][1], initial_vars)
         r.cmd('e.aecu 0x00401DC7')
 
         # code
-        funcs = FuncsExtract(r).extract_funcs(0x00401DC7, funcs[0x00401D77][1], end_addrs=(0x00401E73,))
+        funcs = extract_funcs(r, 0x00401DC7, funcs[0x00401D77][1], end_addrs=(0x00401E73,))
         process_funcs(funcs)
 
     finally:

@@ -1,5 +1,4 @@
 
-- Update extract.py to perform abstract interpretation and to adapt to an instruction mapping to a cfg
 - run main.py to see what is still broken, and simplify cfg which has same blocks of instructions
 - Allow manually specifying functions to be inlined. This is necessary in order to prevent duplicate code blocks from being run.
 - To better locate where blocks are and what we have missing do coverage in js (draw as canvas)

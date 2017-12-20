@@ -1,4 +1,10 @@
+from collections import defaultdict
+from copy import deepcopy
+
+from sortedcontainers import SortedSet
+
 from analysis.block import Block
+from analysis.constraint import DisjunctConstConstraint
 from analysis.func import ESILToFunc, Function
 
 
@@ -8,89 +14,110 @@ class FuncExtract:
         self.start_addr = start_addr
         self.funcs = funcs
         self.start_constraint = constraint
-        self.end_constraint = None
+        self.end_constraint = DisjunctConstConstraint()
         self.end_addrs = set(end_addrs)
         self.initial_vars = {}
 
-        self.addr_to_constraint = {}  # {addr: constraint}
-        self.addr_to_block = {}  # {addr: (block, i)}
-        self.stack = []  # [(addr, state)]
+        # part is the block index within an instruction, so we know if we visited the start of a block before
+        self.block_to_constraint = {}  # {block: constraint}
+        self.block_to_part_len = {}  # {block: part_len}
+        self.block_to_addrp = defaultdict(SortedSet)  # {block: [(addr, part)]}
+        self.addrp_to_block = {}  # {(addr, part): block}
+        self.stack = []  # [block]
 
     def _extract_esil(self, addr):
         # update eip so the instruction is more complete for conditional jmps and call
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}', addr, res['size']
 
-    def _stack_append(self, addr, constraint_):
-        self.stack.append((addr, constraint_))
-        self.addr_to_constraint[addr] = constraint_
+    def _block_remove_instrs(self, block):
+        # removes instructions from block that are complete and not partial
+        addrps = self.block_to_addrp[block]
+        i = next((i for i, (addr, part) in enumerate(addrps) if part == 0), len(addrps))
+        block.addr_sizes = {(addr, size) for addr, size in block.addr_sizes if addr < addrps[i][0]}
+        block.instrs = block.instrs[:self.block_to_part_len[block]]
+        for addrp in addrps[i:]:
+            self.block_to_addrp[block].remove(addrp)
+            self.addrp_to_block.pop(addrp)
 
-    def _extract_block(self, cur_addr, con):
-        con.step(('eip', '=', cur_addr))
-        block, block_i = Block(), 0
+    def _block_append_instr(self, block, addr):
+        func = ESILToFunc(*self._extract_esil(addr)).convert()
+        block.merge(func.block)
+        for i, cur_block in enumerate(block.dfs()):
+            self.block_to_part_len[cur_block] = len(cur_block.instrs)
+            self.block_to_addrp[cur_block].add((addr, i))
+            self.addrp_to_block[(addr, i)] = cur_block
+
+    def _extract_block(self, part, block):
+        con = deepcopy(self.block_to_constraint[block])
+        block_i = 0
         while True:
-            cur_addr = con.const_cons[0].vars.get('eip', None)
+            addr = con.const_cons[0].vars.get('eip', None)
+            is_part_end = block_i == len(block.instrs)
+
+            # reset part to 0
+            if is_part_end:
+                part = 0
 
             # address ends analysis
-            if cur_addr is None or cur_addr in self.end_addrs:
-                if self.end_constraint is None:
-                    con.finalize()
-                    self.end_constraint = con
-                else:
-                    self.end_constraint.widen(con)
+            if is_part_end and not isinstance(addr, int) or addr in self.end_addrs:
+                self.end_constraint.widen(con)
                 break
 
-            # address is already found (through conditional jmps)
-            # if cur_addr in self.addr_to_block:
-            #     block.children = [cur_addr]
-            #     block, i = self.addr_to_block[cur_addr]
-            #     con = ConstConstraint.from_state(state)
-            #     prev_constraint = self.addr_to_constraint[self.block_to_addr[(id(block), 0)]]
-            #     if i == 0:
-            #         con.widen(prev_constraint)
-            #     if i != 0 or con != prev_constraint:
-            #         # remove old block
-            #         addrs = []
-            #         for j in range(len(block.instrs)):
-            #             self.addr_to_block.pop(addrs[-1])
-            #
-            #         # add new block (slice of old block until i)
-            #         new_block = Block(children=[cur_addr])
-            #         for addr, instr in zip(addrs[:i], block.instrs[:i]):
-            #             self.block_append_instr(new_block, addr, instr)
-            #
-            #         # update constraints & re-analyze
-            #         prev_state = prev_constraint.to_state(self.names)
-            #         for instr in block.instrs[:i]:
-            #             prev_state.step(instr)
-            #         con.widen(prev_constraint)
-            #         self._stack_append(cur_addr, con)
-            #     break
+            # address is already found (can happen due to jmps, calls)
+            if (block_i == 0 or is_part_end) and block.instrs and (addr, part) in self.addrp_to_block:
+                goto_block = self.addrp_to_block[(addr, part)]
+                is_broken_up = self.block_to_addrp[goto_block][0] != (addr, part)
 
-            # we have a conditional jmp at the end of the block
-            # matches = re.match(r'(\d+),eip,=,(\wf),(!,)?\?{,(\d+),eip,=,}', instr)
-            # if matches:
-            #     flag = matches.group(2)
-            #     if not state.vars[flag].is_Integer:
-            #         is_negated = bool(matches.group(3))
-            #         # explore remaining code first before exploring jmp
-            #         con = ConstConstraint.from_state(state)
-            #         con.vars[flag] = sympify(int(not is_negated))
-            #         self._stack_append(int(matches.group(4)), con)
-            #         con = ConstConstraint.from_state(state)
-            #         con.vars[flag] = sympify(int(is_negated))
-            #         self._stack_append(int(matches.group(1)), con)
-            #         block.condition = (flag, int(is_negated))
-            #         block.children = [int(matches.group(4)), int(matches.group(1))]
-            #         break
+                if is_broken_up:
+                    # find instrs (due to block simplification) & constraint up to (addr, part)
+                    cur_con = deepcopy(self.block_to_constraint[goto_block])
+                    self._block_remove_instrs(goto_block)
+                    cur_block_i = 0
+                    while True:
+                        cur_addr = cur_con.const_cons[0].vars.get('eip', None)
+                        # part must be 0 since this is at an end of an instruction
+                        if cur_block_i == len(goto_block.instrs) and cur_addr == addr:
+                            break
+                        if cur_block_i == len(goto_block.instrs):
+                            self._block_append_instr(goto_block, cur_addr)
+                        cur_con.step(goto_block.instrs[cur_block_i])
+                        cur_block_i += 1
 
-            # there are no instructions left to analyze
-            if block_i < len(block.instrs):
-                # XXX append instruction
-                ESILToFunc(*self._extract_esil(cur_addr)).convert()
-                instr = self._extract_esil(cur_addr)
-                self.block_append_instr(block, cur_addr, instr)
-                continue
+                    # add empty block as goto_block
+                    goto_block.children = (Block(),)
+                    goto_block = goto_block.children[0]
+                    self.block_to_constraint[goto_block] = cur_con
+
+                block.children = (goto_block,)
+                goto_con = self.block_to_constraint[goto_block]
+                prev_goto_con = deepcopy(goto_con)
+                goto_con.widen(con)
+                if is_broken_up or goto_con != prev_goto_con:
+                    self._block_remove_instrs(goto_block)
+                    self.stack.append((part, goto_block))
+                break
+
+            # we have a conditional jmp
+            if is_part_end and block.condition:
+                # explore remaining code first before exploring jmp
+                children = []
+                for i, val in (0, True), (1, False):
+                    cur_con = deepcopy(con)
+                    cur_con.solve(block.condition, val)
+                    if cur_con.const_cons:
+                        children.append(block.children[i])
+                        cur_con.finalize()
+                        self.block_to_constraint[block.children[i]] = cur_con
+                        self.stack.append((self.block_to_addrp[block.children[i]][0][1], block.children[i]))
+                if len(children) < 2:
+                    block.condition = None
+                    block.children = tuple(children)
+                break
+
+            if is_part_end:
+                # add new instruction
+                self._block_append_instr(block, addr)
 
             # # instruction is a call to api
             # matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],(\d+),eip,=', instr)
@@ -116,21 +143,18 @@ class FuncExtract:
             block_i += 1
 
     def extract(self):
-        self._stack_append(self.start_addr, self.start_constraint)
+        block, con = Block(), self.start_constraint
+        con.step(('eip', '=', self.start_addr))
+        self.block_to_constraint[block] = deepcopy(con)
+        self.block_to_addrp[block].add((self.start_addr, 0))
+        self.addrp_to_block[(self.start_addr, 0)] = block
+        self.stack.append((0, block))
         while self.stack:
             self._extract_block(*self.stack.pop())
-        addrs = {self.start_addr}
-        for block, i in self.addr_to_block.values():
-            addrs.update(block.children)
-        func = Function(self.start_addr, {addr: self.addr_to_block[addr][0] for addr in addrs})
-        self.funcs[self.start_addr] = func, self.end_constraint
+        self.funcs[self.start_addr] = Function(self.start_addr, block), self.end_constraint
 
 
-class FuncsExtract:
-    def __init__(self, r):
-        self.r = r
-
-    def extract_funcs(self, addr, constraint, end_addrs=()):
-        funcs = {}
-        FuncExtract(self.r, addr, funcs, constraint, end_addrs).extract()
-        return funcs
+def extract_funcs(r, addr, constraint, end_addrs=()):
+    funcs = {}
+    FuncExtract(r, addr, funcs, constraint, end_addrs).extract()
+    return funcs

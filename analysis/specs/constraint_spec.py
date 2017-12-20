@@ -7,14 +7,24 @@ from analysis.specs._stub import *
 from analysis.winapi import win_api
 
 with description('ConstConstraint'):
-    with it('initializes possible mem offsets to placeholders and flags to their initial values'):
-        c = ConstConstraint.from_oep()
-        expect(c.vars).to(equal({
-            'eax': ('eax_0', 0), 'ecx': ('ecx_0', 0), 'edx': ('edx_0', 0), 'ebx': ('ebx_0', 0),
-            'esp': ('esp_0', 0), 'ebp': ('ebp_0', 0), 'esi': ('esi_0', 0), 'edi': ('edi_0', 0),
-            'eip': ('eip_0', 0),
-            'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'tf': 0, 'df': 0, 'of': 0,
-        }))
+    with description('from_func_init'):
+        with it('initializes possible mem offsets to placeholders'):
+            c = ConstConstraint.from_func_init()
+            expect(c.vars).to(equal({
+                'eax': ('eax_0', 0), 'ecx': ('ecx_0', 0), 'edx': ('edx_0', 0), 'ebx': ('ebx_0', 0),
+                'esp': ('esp_0', 0), 'ebp': ('ebp_0', 0), 'esi': ('esi_0', 0), 'edi': ('edi_0', 0),
+                'eip': ('eip_0', 0),
+            }))
+
+    with description('from_oep'):
+        with it('initializes possible mem offsets to placeholders and flags to their initial values'):
+            c = ConstConstraint.from_oep()
+            expect(c.vars).to(equal({
+                'eax': ('eax_0', 0), 'ecx': ('ecx_0', 0), 'edx': ('edx_0', 0), 'ebx': ('ebx_0', 0),
+                'esp': ('esp_0', 0), 'ebp': ('ebp_0', 0), 'esi': ('esi_0', 0), 'edi': ('edi_0', 0),
+                'eip': ('eip_0', 0),
+                'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'tf': 0, 'df': 0, 'of': 0,
+            }))
 
     with description('__eq__'):
         with before.each:
@@ -305,6 +315,10 @@ with description('ConstConstraint'):
             expect(self.c.mem.values).to(equal({}))
 
 with description('DisjunctConstConstraint'):
+    with it('initializes from_func_init'):
+        cons = DisjunctConstConstraint.from_func_init()
+        expect(cons.const_cons).to(equal([ConstConstraint.from_func_init()]))
+
     with it('initializes from oep'):
         cons = DisjunctConstConstraint.from_oep()
         expect(cons.const_cons).to(equal([ConstConstraint.from_oep()]))
@@ -328,6 +342,9 @@ with description('DisjunctConstConstraint'):
             expect(lambda: cons.solve('tmp_0', 1)).to(raise_error(ValueError))
 
     with description('_expand_constraints'):
+        with it('expands empty set of constraints'):
+            expect(DisjunctConstConstraint._expand_constraints([])).to(equal([]))
+
         with it('expands None'):
             expect(DisjunctConstConstraint._expand_constraints([
                 (None, 0, None),
@@ -336,6 +353,9 @@ with description('DisjunctConstConstraint'):
             ]))
 
     with description('_reduce_constraints'):
+        with it('reduces empty set of constraints'):
+            expect(DisjunctConstConstraint._reduce_constraints([])).to(equal([]))
+
         with it('reduces to None'):
             expect(DisjunctConstConstraint._reduce_constraints([
                 (0, 0, 0), (0, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1),

@@ -44,9 +44,14 @@ class ConstConstraint:
         )
 
     @staticmethod
-    def from_oep():
+    def from_func_init():
         self = ConstConstraint()
         self.vars = {name: (f'{name}_0', 0) for name, bits in self.bits.items() if bits == 32}
+        return self
+
+    @classmethod
+    def from_oep(cls):
+        self = cls.from_func_init()
         for name, val in {'cf': 0, 'pf': 1, 'af': 0, 'zf': 1, 'sf': 0, 'tf': 0, 'df': 0, 'of': 0}.items():
             self.vars[name] = val
         return self
@@ -232,12 +237,18 @@ class DisjunctConstConstraint:
         return self.const_cons == other.const_cons
 
     @staticmethod
+    def from_func_init():
+        return DisjunctConstConstraint([ConstConstraint.from_func_init()])
+
+    @staticmethod
     def from_oep():
         return DisjunctConstConstraint([ConstConstraint.from_oep()])
 
     @staticmethod
     def _expand_constraints(tuple_cons):
         # go through each flag
+        if not tuple_cons:
+            return []
         for i in range(len(tuple_cons[0])):
             res = []
             for con in tuple_cons:
@@ -252,6 +263,8 @@ class DisjunctConstConstraint:
     @staticmethod
     def _reduce_constraints(tuple_cons):
         # go through each flag
+        if not tuple_cons:
+            return []
         for i in range(len(tuple_cons[0])):
             rest_dups = defaultdict(set)
             for con in tuple_cons:

@@ -20,7 +20,7 @@ def to_blocks(block_defs):
 def to_func(addr, block_defs):
     blocks = to_blocks(block_defs)
     func = Function(addr, blocks[0])
-    for i, (block, block_dfs) in enumerate(zip(blocks, func.blocks)):
+    for i, (block, block_dfs) in enumerate(zip(blocks, func.block.dfs())):
         if block is not block_dfs:
             raise ValueError(f'block {i} is not sorted via dfs (needed so eq_func errors make sense)')
     return func
@@ -38,7 +38,7 @@ class eq_func(Matcher):
     def _match(self, func):
         try:
             self._check_eq('addr is different', func.addr, self._expected.addr)
-            func_blocks, expected_blocks = list(func.blocks), list(self._expected.blocks)
+            func_blocks, expected_blocks = list(func.block.dfs()), list(self._expected.block.dfs())
             self._check_eq('# of blocks are different', len(func_blocks), len(expected_blocks))
             for i, (func_block, expected_block) in enumerate(zip(func_blocks, expected_blocks)):
                 self._check_eq(f'block {i} instrs are different', func_block.instrs, expected_block.instrs)

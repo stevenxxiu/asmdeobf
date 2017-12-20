@@ -1,4 +1,8 @@
 
+def is_var(name):
+    return isinstance(name, str) and str.isidentifier(name)
+
+
 class MemValues:
     def __init__(self):
         self.values = {}  # {(offset, size): value}
@@ -21,7 +25,3 @@ class MemValues:
 
     def invalidate(self):
         self.values.clear()
-
-
-def is_var(name):
-    return isinstance(name, str) and str.isidentifier(name)

@@ -12,15 +12,18 @@ class Block:
     modified, since this is the more common use case, and the implementation is simpler.
     '''
 
-    def __init__(self, addr_sizes=None, instrs=None):
+    def __init__(self, addr_sizes=(), instrs=None):
         '''
         instr is of the form: (dest, assign_op, ...).
         '''
-        self.addr_sizes = addr_sizes or set()
+        self.addr_sizes = set(addr_sizes)
         self.instrs = instrs or []
         self.condition = None
         self.parents = set()  # should not be modified directly by users
         self._children = ()
+
+    def __hash__(self):
+        return id(self)
 
     def __str__(self):
         instrs_new = []
@@ -30,7 +33,7 @@ class Block:
             if arity == 0:
                 instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}')
             elif arity == 1:
-                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}{parts[3]}')
+                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]} {parts[3]}')
             elif arity == 2:
                 instrs_new.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
             else:
@@ -66,6 +69,20 @@ class Block:
         for child in value:
             child.parents.add(self)
         self._children = value
+
+    def dfs(self):
+        '''
+        DFS is more natural for unit tests (matches esil order).
+        Children can be modified during traversal.
+        '''
+        visited = set()
+        stack = [self]
+        while stack:
+            block = stack.pop()
+            if id(block) not in visited:
+                yield block
+                visited.add(id(block))
+                stack.extend(reversed(block.children))
 
 
 def sa_to_ssa(instrs):
@@ -334,4 +351,6 @@ def block_simplify(block, useful_regs=None):
             break
     instrs, var_map_sa = ssa_to_sa(instrs)
     block.instrs = instrs
-    block.condition = cond and var_map_sa.get(var_map_ssa[cond], var_map_ssa[cond])
+    cond = var_map_ssa.get(cond, cond)
+    cond = var_map_sa.get(cond, cond)
+    block.condition = cond

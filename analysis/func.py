@@ -8,21 +8,6 @@ class Function:
         self.addr = addr
         self.block = block
 
-    @property
-    def blocks(self):
-        '''
-        DFS is more natural for unit tests (matches esil order).
-        Children can be modified during traversal.
-        '''
-        visited = set()
-        stack = [self.block]
-        while stack:
-            block = stack.pop()
-            if id(block) not in visited:
-                yield block
-                visited.add(id(block))
-                stack.extend(reversed(block.children))
-
 
 class ESILToFunc:
     def __init__(self, instr, addr, size):
@@ -209,14 +194,14 @@ class ESILToFunc:
 
         # instr transforms
         func = Function(self.addr, start_block)
-        for block in func.blocks:
+        for block in func.block.dfs():
             block.instrs = self._sa_include_flag_deps(block.instrs)
             block.instrs = self._sa_include_subword_deps(block.instrs)
         return func
 
 
 def func_remove_same_children(func):
-    for block in func.blocks:
+    for block in func.block.dfs():
         if len(block.children) == 2:
             child_1, child_2 = block.children
             if (
