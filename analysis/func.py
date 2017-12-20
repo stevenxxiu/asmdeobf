@@ -201,9 +201,10 @@ class ESILToFunc:
                 raise ValueError('stack is not 0')
             goto_block, block_i = self.labels[i]
             if block_i != 0:
-                upper_half = goto_block.split(block_i)
-                if start_block == goto_block:
-                    start_block = upper_half
+                goto_block.children = (goto_block.split(block_i),)
+                if block is goto_block:
+                    block = goto_block.children[0]
+                goto_block = goto_block.children[0]
             block.children = (goto_block,)
 
         # instr transforms
@@ -223,9 +224,7 @@ def func_remove_same_children(func):
                 child_1.condition == child_2.condition
             ):
                 child_1.addr_sizes.update(child_2.addr_sizes)
-                child_1.merge(block)
-                if block == func.block:
-                    func.block = child_1
+                block.merge(child_1)
 
 
 def func_simplify(func):

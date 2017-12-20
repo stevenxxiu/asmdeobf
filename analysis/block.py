@@ -7,6 +7,11 @@ __all__ = ['Block', 'block_simplify']
 
 
 class Block:
+    '''
+    split() & merge() keeps upper-half in the graph, so that data structures which reference self do not need to be
+    modified, since this is the more common use case, and the implementation is simpler.
+    '''
+
     def __init__(self, addr_sizes=None, instrs=None):
         '''
         instr is of the form: (dest, assign_op, ...).
@@ -33,23 +38,19 @@ class Block:
         return '\n'.join(instrs_new)
 
     def split(self, i):
-        upper_half = Block(addr_sizes=self.addr_sizes, instrs=self.instrs[:i])
-        upper_half.parents.update(self.parents)
-        for parent in self.parents:
-            parent._children = tuple(upper_half if child == self else child for child in parent._children)
-        self.parents.clear()
-        self.instrs = self.instrs[i:]
-        upper_half.children = (self,)
-        return upper_half
+        lower_half = Block(addr_sizes=self.addr_sizes, instrs=self.instrs[i:])
+        lower_half.condition = self.condition
+        lower_half.children = self.children
+        self.instrs = self.instrs[:i]
+        self.children = ()
+        return lower_half
 
-    def merge(self, upper_half):
-        for parent in upper_half.parents:
-            parent._children = tuple(self if child == upper_half else child for child in parent._children)
-        upper_half.children = ()
-        self.parents = set(upper_half.parents)
-        upper_half.parents.clear()
-        self.addr_sizes.update(upper_half.addr_sizes)
-        self.instrs = upper_half.instrs + self.instrs
+    def merge(self, lower_half):
+        self.instrs.extend(lower_half.instrs)
+        self.condition = lower_half.condition
+        self.children = lower_half.children
+        self.addr_sizes.update(lower_half.addr_sizes)
+        lower_half.children = ()
 
     @property
     def children(self):

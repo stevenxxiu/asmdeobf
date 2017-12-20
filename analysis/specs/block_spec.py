@@ -39,16 +39,16 @@ with description('Block'):
             {'children': ()},
             {'children': ()},
         ])
-        lower_half, upper_half = blocks[2], blocks[2].split(1)
+        upper_half, lower_half = blocks[2], blocks[2].split(1)
         expect(blocks[0].children).to(equal((upper_half,)))
         expect(blocks[1].children).to(equal((upper_half,)))
         expect(upper_half.addr_sizes).to(equal({(0, 4)}))
         expect(upper_half.instrs).to(equal([('eax', '=', 1)]))
         expect(upper_half.parents).to(equal({blocks[0], blocks[1]}))
-        expect(upper_half.children).to(equal((lower_half,)))
+        expect(upper_half.children).to(equal(()))
         expect(lower_half.addr_sizes).to(equal({(0, 4)}))
         expect(lower_half.instrs).to(equal([('eax', '=', 2)]))
-        expect(lower_half.parents).to(equal({upper_half}))
+        expect(lower_half.parents).to(equal(set()))
         expect(lower_half.condition).to(equal('tmp'))
         expect(lower_half.children).to(equal((blocks[3], blocks[4])))
 
@@ -63,16 +63,16 @@ with description('Block'):
             {'children': ()},
         ])
         upper_half, lower_half = blocks[2], blocks[3]
-        blocks[3].merge(blocks[2])
-        expect(blocks[0].children).to(equal((lower_half,)))
-        expect(blocks[1].children).to(equal((lower_half,)))
-        expect(lower_half.addr_sizes).to(equal({(0, 4), (4, 4)}))
-        expect(lower_half.instrs).to(equal([('eax', '=', 1), ('eax', '=', 2)]))
-        expect(lower_half.condition).to(equal('tmp_2'))
-        expect(lower_half.parents).to(equal({blocks[0], blocks[1]}))
-        expect(lower_half.children).to(equal((blocks[5], blocks[6])))
-        expect(upper_half.parents).to(equal(set()))
-        expect(upper_half.children).to(equal(()))
+        upper_half.merge(lower_half)
+        expect(blocks[0].children).to(equal((upper_half,)))
+        expect(blocks[1].children).to(equal((upper_half,)))
+        expect(upper_half.addr_sizes).to(equal({(0, 4), (4, 4)}))
+        expect(upper_half.instrs).to(equal([('eax', '=', 1), ('eax', '=', 2)]))
+        expect(upper_half.condition).to(equal('tmp_2'))
+        expect(upper_half.parents).to(equal({blocks[0], blocks[1]}))
+        expect(upper_half.children).to(equal((blocks[5], blocks[6])))
+        expect(lower_half.parents).to(equal(set()))
+        expect(lower_half.children).to(equal(()))
         expect(blocks[4].parents).to(equal(set()))
 
     with description('children.setter'):
