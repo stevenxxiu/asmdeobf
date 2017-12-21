@@ -40,12 +40,15 @@ class Block:
                 raise ValueError
         return '\n'.join(instrs_new)
 
-    def split(self, i):
+    def split(self, i, addr_i=None):
         lower_half = Block(addr_sizes=self.addr_sizes, instrs=self.instrs[i:])
         lower_half.condition = self.condition
         lower_half.children = self.children
         self.instrs = self.instrs[:i]
         self.children = ()
+        if addr_i:
+            self.addr_sizes = {(addr, size) for addr, size in self.addr_sizes if addr < addr_i}
+            lower_half.addr_sizes = {(addr, size) for addr, size in lower_half.addr_sizes if addr >= addr_i}
         return lower_half
 
     def merge(self, lower_half):

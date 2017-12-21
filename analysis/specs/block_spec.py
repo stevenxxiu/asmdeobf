@@ -29,28 +29,35 @@ with description('Block'):
                 ('eax', '=', '??', 1, 1, 1),
             ]))).to(raise_error(ValueError))
 
-    with it('splits block'):
-        blocks = to_blocks([
-            {'children': (2,)},
-            {'children': (2,)},
-            {'addr_sizes': {(0, 4)}, 'instrs': [
-                ('eax', '=', 1), ('eax', '=', 2)
-            ], 'condition': 'tmp', 'children': (3, 4)},
-            {'children': ()},
-            {'children': ()},
-        ])
-        upper_half, lower_half = blocks[2], blocks[2].split(1)
-        expect(blocks[0].children).to(equal((upper_half,)))
-        expect(blocks[1].children).to(equal((upper_half,)))
-        expect(upper_half.addr_sizes).to(equal({(0, 4)}))
-        expect(upper_half.instrs).to(equal([('eax', '=', 1)]))
-        expect(upper_half.parents).to(equal({blocks[0], blocks[1]}))
-        expect(upper_half.children).to(equal(()))
-        expect(lower_half.addr_sizes).to(equal({(0, 4)}))
-        expect(lower_half.instrs).to(equal([('eax', '=', 2)]))
-        expect(lower_half.parents).to(equal(set()))
-        expect(lower_half.condition).to(equal('tmp'))
-        expect(lower_half.children).to(equal((blocks[3], blocks[4])))
+    with description('split'):
+        with it('splits block'):
+            blocks = to_blocks([
+                {'children': (2,)},
+                {'children': (2,)},
+                {'addr_sizes': {(0, 4)}, 'instrs': [
+                    ('eax', '=', 1), ('eax', '=', 2)
+                ], 'condition': 'tmp', 'children': (3, 4)},
+                {'children': ()},
+                {'children': ()},
+            ])
+            upper_half, lower_half = blocks[2], blocks[2].split(1)
+            expect(blocks[0].children).to(equal((upper_half,)))
+            expect(blocks[1].children).to(equal((upper_half,)))
+            expect(upper_half.addr_sizes).to(equal({(0, 4)}))
+            expect(upper_half.instrs).to(equal([('eax', '=', 1)]))
+            expect(upper_half.parents).to(equal({blocks[0], blocks[1]}))
+            expect(upper_half.children).to(equal(()))
+            expect(lower_half.addr_sizes).to(equal({(0, 4)}))
+            expect(lower_half.instrs).to(equal([('eax', '=', 2)]))
+            expect(lower_half.parents).to(equal(set()))
+            expect(lower_half.condition).to(equal('tmp'))
+            expect(lower_half.children).to(equal((blocks[3], blocks[4])))
+
+        with it('splits addr_sizes'):
+            blocks = to_blocks([{'addr_sizes': {(0, 4), (4, 4)}, 'instrs': []}])
+            upper_half, lower_half = blocks[0], blocks[0].split(0, 4)
+            expect(upper_half.addr_sizes).to(equal({(0, 4)}))
+            expect(lower_half.addr_sizes).to(equal({(4, 4)}))
 
     with it('merges blocks no matter how many children the block has'):
         blocks = to_blocks([

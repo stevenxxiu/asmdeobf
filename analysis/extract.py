@@ -69,12 +69,8 @@ class FuncExtract:
             if (block_i == 0 or is_part_end) and block.instrs and (addr, part) in self.addrp_to_block:
                 goto_block, block_i = self.addrp_to_block[(addr, part)]
                 if block_i:
-                    lower_half = goto_block.split(block_i)
-
-                    # update addr_sizes
-                    addr_i = self.block_to_addrp[(goto_block, block_i)][0]
-                    goto_block.addr_sizes = {(addr, size) for addr, size in goto_block.addr_sizes if addr < addr_i}
-                    lower_half.addr_sizes = {(addr, size) for addr, size in lower_half.addr_sizes if addr >= addr_i}
+                    # split block
+                    lower_half = goto_block.split(block_i, self.block_to_addrp[(goto_block, block_i)][0])
 
                     # update addrp maps
                     for i in range(len(lower_half.instrs)):
