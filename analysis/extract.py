@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+from bidict import bidict
+
 from analysis.block import Block
 from analysis.constraint import DisjunctConstConstraint
 from analysis.func import ESILToFunc, Function
@@ -17,8 +19,7 @@ class FuncExtract:
 
         # part is the block index within an instruction, so we know if we visited the start of a block before
         self.block_to_constraint = {}  # {block: constraint}
-        self.block_to_addrp = {}  # {(block, block_i): (addr, part)}
-        self.addrp_to_block = {}  # {(addr, part): (block, block_i)}
+        self.addrp_to_block = bidict()  # {(addr, part): (block, block_i)}
         self.edges = set()  # [(parent, child)]
         self.stack = []  # [block]
 
@@ -33,7 +34,6 @@ class FuncExtract:
         for part, cur_block in enumerate(block.dfs()):
             if cur_block.instrs:
                 block_i = len(block.instrs) - len(func.block.instrs) if part == 0 else 0
-                self.block_to_addrp[(cur_block, block_i)] = (addr, part)
                 self.addrp_to_block[(addr, part)] = (cur_block, block_i)
 
     def _extract_block(self, part, block):
@@ -62,7 +62,7 @@ class FuncExtract:
                         cur_con.finalize()
                         self.block_to_constraint[child] = cur_con
                         self.edges.add((block, child))
-                        self.stack.append((self.block_to_addrp.get((child, 0), (None, 0))[1], child))
+                        self.stack.append((self.addrp_to_block.inv.get((child, 0), (None, 0))[1], child))
                 break
 
             # address is already found (can happen due to jmps or constraint propagation)
@@ -70,14 +70,13 @@ class FuncExtract:
                 goto_block, block_i = self.addrp_to_block[(addr, part)]
                 if block_i:
                     # split block
-                    lower_half = goto_block.split(block_i, self.block_to_addrp[(goto_block, block_i)][0])
+                    lower_half = goto_block.split(block_i, self.addrp_to_block.inv[(goto_block, block_i)][0])
 
                     # update addrp maps
                     for i in range(len(lower_half.instrs)):
-                        if (goto_block, block_i + i) in self.block_to_addrp:
-                            addrp = self.block_to_addrp.pop((goto_block, block_i + i))
-                            self.block_to_addrp[(lower_half, i)] = addrp
-                            self.addrp_to_block[addrp] = lower_half, i
+                        key = (goto_block, block_i + i)
+                        if key in self.addrp_to_block.inv:
+                            self.addrp_to_block.inv[(lower_half, i)] = self.addrp_to_block.inv.pop(key)
 
                     # find lower_half constraints
                     cur_con = deepcopy(self.block_to_constraint[goto_block])
