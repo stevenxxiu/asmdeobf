@@ -65,31 +65,43 @@ class FuncExtract:
                         self.stack.append((self.block_to_addrp.get((child, 0), (None, 0))[1], child))
                 break
 
-            # address is already found (can happen due to jmps, calls)
+            # address is already found (can happen due to jmps or constraint propagation)
             if (block_i == 0 or is_part_end) and block.instrs and (addr, part) in self.addrp_to_block:
                 goto_block, block_i = self.addrp_to_block[(addr, part)]
                 if block_i:
                     lower_half = goto_block.split(block_i)
+
+                    # update addr_sizes
                     addr_i = self.block_to_addrp[(goto_block, block_i)][0]
                     goto_block.addr_sizes = {(addr, size) for addr, size in goto_block.addr_sizes if addr < addr_i}
                     lower_half.addr_sizes = {(addr, size) for addr, size in lower_half.addr_sizes if addr >= addr_i}
+
+                    # update addrp maps
                     for i in range(len(lower_half.instrs)):
                         if (goto_block, block_i + i) in self.block_to_addrp:
                             addrp = self.block_to_addrp.pop((goto_block, block_i + i))
                             self.block_to_addrp[(lower_half, i)] = addrp
                             self.addrp_to_block[addrp] = lower_half, i
+
+                    # find lower_half constraints
                     cur_con = deepcopy(self.block_to_constraint[goto_block])
                     for instr in goto_block.instrs:
                         cur_con.step(instr)
+                    self.block_to_constraint[lower_half] = cur_con
+
+                    # update blocks
                     goto_block.children = (lower_half,)
                     self.edges.add((goto_block, lower_half))
                     if block == goto_block:
                         block = lower_half
                     goto_block = lower_half
-                    self.block_to_constraint[goto_block] = cur_con
-                if not block.children:
+
+                # address found due to jmp
+                if is_part_end:
                     block.children = (goto_block,)
                     self.edges.add((block, goto_block))
+
+                # update constraints
                 goto_con = self.block_to_constraint[goto_block]
                 prev_goto_con = deepcopy(goto_con)
                 goto_con.widen(con)
@@ -101,8 +113,8 @@ class FuncExtract:
                     continue
                 break
 
+            # add new instruction
             if is_part_end:
-                # add new instruction
                 self._block_append_instr(block, addr)
 
             # # instruction is a call to api
