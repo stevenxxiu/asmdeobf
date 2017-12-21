@@ -55,12 +55,10 @@ class FuncExtract:
             # we have a conditional jmp
             if is_part_end and block.condition:
                 # explore remaining code first before exploring jmp
-                children = []
                 for child, val in zip(block.children, (True, False)):
                     cur_con = deepcopy(con)
                     cur_con.solve(block.condition, val)
                     if cur_con.const_cons:
-                        children.append(child)
                         cur_con.finalize()
                         self.block_to_constraint[child] = cur_con
                         self.edges.add((block, child))
