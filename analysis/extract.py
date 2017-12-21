@@ -27,14 +27,6 @@ class FuncExtract:
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}', addr, res['size']
 
-    def _block_remove_instrs(self, block, block_i):
-        addr_i = self.block_to_addrp[(block, block_i)][0] if block_i > 0 else 0
-        block.addr_sizes = {(addr, size) for addr, size in block.addr_sizes if addr < addr_i}
-        for i in range(block_i, len(block.instrs)):
-            if (block, i) in self.block_to_addrp:
-                self.addrp_to_block.pop(self.block_to_addrp.pop((block, i)))
-        block.instrs = block.instrs[:block_i]
-
     def _block_append_instr(self, block, addr):
         func = ESILToFunc(*self._extract_esil(addr)).convert()
         block.merge(func.block)
@@ -79,23 +71,36 @@ class FuncExtract:
             if (block_i == 0 or is_part_end) and block.instrs and (addr, part) in self.addrp_to_block:
                 goto_block, block_i = self.addrp_to_block[(addr, part)]
                 if block_i:
-                    self._block_remove_instrs(goto_block, block_i)
+                    lower_half = goto_block.split(block_i)
+                    addr_i = self.block_to_addrp[(goto_block, block_i)][0]
+                    goto_block.addr_sizes = {(addr, size) for addr, size in goto_block.addr_sizes if addr < addr_i}
+                    lower_half.addr_sizes = {(addr, size) for addr, size in lower_half.addr_sizes if addr >= addr_i}
+                    for i in range(len(lower_half.instrs)):
+                        if (goto_block, block_i + i) in self.block_to_addrp:
+                            addrp = self.block_to_addrp.pop((goto_block, block_i + i))
+                            self.block_to_addrp[(lower_half, i)] = addrp
+                            self.addrp_to_block[addrp] = lower_half, i
                     cur_con = deepcopy(self.block_to_constraint[goto_block])
                     for instr in goto_block.instrs:
                         cur_con.step(instr)
-                    goto_block.children = (Block(),)
-                    self.edges.add((goto_block, goto_block.children[0]))
-                    goto_block = goto_block.children[0]
+                    goto_block.children = (lower_half,)
+                    self.edges.add((goto_block, lower_half))
+                    if block == goto_block:
+                        block = lower_half
+                    goto_block = lower_half
                     self.block_to_constraint[goto_block] = cur_con
-                block.children = (goto_block,)
-                self.edges.add((block, goto_block))
+                if not block.children:
+                    block.children = (goto_block,)
+                    self.edges.add((block, goto_block))
                 goto_con = self.block_to_constraint[goto_block]
                 prev_goto_con = deepcopy(goto_con)
                 goto_con.widen(con)
                 if block_i or goto_con != prev_goto_con:
-                    self._block_remove_instrs(goto_block, 0)
-                    self.edges.add((block, goto_block))
-                    self.stack.append((part, goto_block))
+                    con = deepcopy(goto_con)
+                    for instr in goto_block.instrs:
+                        con.step(instr)
+                    block, block_i = goto_block, len(goto_block.instrs)
+                    continue
                 break
 
             if is_part_end:
