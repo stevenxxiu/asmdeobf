@@ -38,45 +38,25 @@ with description('FuncExtract'):
             ('eip', '=', 103), ('tmp_0', '=[4]', 'esp'), ('eip', '=', 'tmp_0'), ('esp', '=', '+', 'esp', 4),
         ]}])))
 
-    with description('breaks up existing blocks'):
-        with it('breaks up if there is a jmp into it'):
-            r = MockRadare(textwrap.dedent('''
-                0,eax,=
-                1,eax,=
-                101,eip,=
-                esp,[4],eip,=,4,esp,+=
-            ''').strip().split('\n'), 100)
-            expect(
-                extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
-            ).to(eq_func(to_func(100, [{
-                'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
-                    ('eip', '=', 101), ('eax', '=', 0),
-                ], 'children': (1,),
-            }, {
-                'addr_sizes': {(i, 1) for i in range(101, 103)}, 'instrs': [
-                    ('eip', '=', 102), ('eax', '=', 1),
-                    ('eip', '=', 103), ('eip', '=', 101),
-                ], 'children': (1,),
-            }])))
-
-        with it('does not stop analyzing after breaking up if constraints are the same'):
-            r = MockRadare(textwrap.dedent('''
-                0,eax,=
-                0,eax,=
-                101,eip,=
-            ''').strip().split('\n'), 100)
-            expect(
-                extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
-            ).to(eq_func(to_func(100, [{
-                'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
-                    ('eip', '=', 101), ('eax', '=', 0),
-                ], 'children': (1,),
-            }, {
-                'addr_sizes': {(i, 1) for i in range(101, 103)}, 'instrs': [
-                    ('eip', '=', 102), ('eax', '=', 0),
-                    ('eip', '=', 103), ('eip', '=', 101),
-                ], 'children': (1,),
-            }])))
+    with it('breaks up existing blocks if there is a jmp into it'):
+        r = MockRadare(textwrap.dedent('''
+            0,eax,=
+            1,eax,=
+            101,eip,=
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        expect(
+            extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
+        ).to(eq_func(to_func(100, [{
+            'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
+                ('eip', '=', 101), ('eax', '=', 0),
+            ], 'children': (1,),
+        }, {
+            'addr_sizes': {(i, 1) for i in range(101, 103)}, 'instrs': [
+                ('eip', '=', 102), ('eax', '=', 1),
+                ('eip', '=', 103), ('eip', '=', 101),
+            ], 'children': (1,),
+        }])))
 
     with it('ignores conditional jmps if the constraint is unsatisfiable'):
         r = MockRadare(textwrap.dedent('''

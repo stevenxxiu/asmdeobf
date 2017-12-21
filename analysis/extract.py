@@ -101,7 +101,7 @@ class FuncExtract:
                 goto_con = self.block_to_constraint[goto_block]
                 prev_goto_con = deepcopy(goto_con)
                 goto_con.widen(con)
-                if block_i or goto_con != prev_goto_con:
+                if goto_con != prev_goto_con:
                     con = deepcopy(goto_con)
                     for instr in goto_block.instrs:
                         con.step(instr)
