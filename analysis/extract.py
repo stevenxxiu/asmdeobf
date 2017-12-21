@@ -85,7 +85,7 @@ class FuncExtract:
                         cur_con.step(instr)
                     self.block_to_constraint[lower_half] = cur_con
 
-                    # update blocks
+                    # update block vars
                     goto_block.children = (lower_half,)
                     self.edges.add((goto_block, lower_half))
                     if block == goto_block:
