@@ -1,7 +1,4 @@
-from collections import defaultdict
 from copy import deepcopy
-
-from sortedcontainers import SortedSet
 
 from analysis.block import Block
 from analysis.constraint import DisjunctConstConstraint
@@ -20,9 +17,9 @@ class FuncExtract:
 
         # part is the block index within an instruction, so we know if we visited the start of a block before
         self.block_to_constraint = {}  # {block: constraint}
-        self.block_to_part_len = {}  # {block: part_len}
-        self.block_to_addrp = defaultdict(SortedSet)  # {block: [(addr, part)]}
-        self.addrp_to_block = {}  # {(addr, part): block}
+        self.block_to_addrp = {}  # {(block, block_i): (addr, part)}
+        self.addrp_to_block = {}  # {(addr, part): (block, block_i)}
+        self.edges = set()  # [(parent, child)]
         self.stack = []  # [block]
 
     def _extract_esil(self, addr):
@@ -30,23 +27,22 @@ class FuncExtract:
         res = self.r.cmdj(f'pdj 1 @ {addr}')[0]
         return f'{addr + res["size"]},eip,=,{res["esil"]}', addr, res['size']
 
-    def _block_remove_instrs(self, block):
-        # removes instructions from block that are complete and not partial
-        addrps = self.block_to_addrp[block]
-        i = next((i for i, (addr, part) in enumerate(addrps) if part == 0), len(addrps))
-        block.addr_sizes = {(addr, size) for addr, size in block.addr_sizes if addr < addrps[i][0]}
-        block.instrs = block.instrs[:self.block_to_part_len[block]]
-        for addrp in addrps[i:]:
-            self.block_to_addrp[block].remove(addrp)
-            self.addrp_to_block.pop(addrp)
+    def _block_remove_instrs(self, block, block_i):
+        addr_i = self.block_to_addrp[(block, block_i)][0] if block_i > 0 else 0
+        block.addr_sizes = {(addr, size) for addr, size in block.addr_sizes if addr < addr_i}
+        for i in range(block_i, len(block.instrs)):
+            if (block, i) in self.block_to_addrp:
+                self.addrp_to_block.pop(self.block_to_addrp.pop((block, i)))
+        block.instrs = block.instrs[:block_i]
 
     def _block_append_instr(self, block, addr):
         func = ESILToFunc(*self._extract_esil(addr)).convert()
         block.merge(func.block)
-        for i, cur_block in enumerate(block.dfs()):
-            self.block_to_part_len[cur_block] = len(cur_block.instrs)
-            self.block_to_addrp[cur_block].add((addr, i))
-            self.addrp_to_block[(addr, i)] = cur_block
+        for part, cur_block in enumerate(block.dfs()):
+            if cur_block.instrs:
+                block_i = len(block.instrs) - len(func.block.instrs) if part == 0 else 0
+                self.block_to_addrp[(cur_block, block_i)] = (addr, part)
+                self.addrp_to_block[(addr, part)] = (cur_block, block_i)
 
     def _extract_block(self, part, block):
         con = deepcopy(self.block_to_constraint[block])
@@ -64,55 +60,42 @@ class FuncExtract:
                 self.end_constraint.widen(con)
                 break
 
-            # address is already found (can happen due to jmps, calls)
-            if (block_i == 0 or is_part_end) and block.instrs and (addr, part) in self.addrp_to_block:
-                goto_block = self.addrp_to_block[(addr, part)]
-                is_broken_up = self.block_to_addrp[goto_block][0] != (addr, part)
-
-                if is_broken_up:
-                    # find instrs (due to block simplification) & constraint up to (addr, part)
-                    cur_con = deepcopy(self.block_to_constraint[goto_block])
-                    self._block_remove_instrs(goto_block)
-                    cur_block_i = 0
-                    while True:
-                        cur_addr = cur_con.const_cons[0].vars.get('eip', None)
-                        # part must be 0 since this is at an end of an instruction
-                        if cur_block_i == len(goto_block.instrs) and cur_addr == addr:
-                            break
-                        if cur_block_i == len(goto_block.instrs):
-                            self._block_append_instr(goto_block, cur_addr)
-                        cur_con.step(goto_block.instrs[cur_block_i])
-                        cur_block_i += 1
-
-                    # add empty block as goto_block
-                    goto_block.children = (Block(),)
-                    goto_block = goto_block.children[0]
-                    self.block_to_constraint[goto_block] = cur_con
-
-                block.children = (goto_block,)
-                goto_con = self.block_to_constraint[goto_block]
-                prev_goto_con = deepcopy(goto_con)
-                goto_con.widen(con)
-                if is_broken_up or goto_con != prev_goto_con:
-                    self._block_remove_instrs(goto_block)
-                    self.stack.append((part, goto_block))
-                break
-
             # we have a conditional jmp
             if is_part_end and block.condition:
                 # explore remaining code first before exploring jmp
                 children = []
-                for i, val in (0, True), (1, False):
+                for child, val in zip(block.children, (True, False)):
                     cur_con = deepcopy(con)
                     cur_con.solve(block.condition, val)
                     if cur_con.const_cons:
-                        children.append(block.children[i])
+                        children.append(child)
                         cur_con.finalize()
-                        self.block_to_constraint[block.children[i]] = cur_con
-                        self.stack.append((self.block_to_addrp[block.children[i]][0][1], block.children[i]))
-                if len(children) < 2:
-                    block.condition = None
-                    block.children = tuple(children)
+                        self.block_to_constraint[child] = cur_con
+                        self.edges.add((block, child))
+                        self.stack.append((self.block_to_addrp.get((child, 0), (None, 0))[1], child))
+                break
+
+            # address is already found (can happen due to jmps, calls)
+            if (block_i == 0 or is_part_end) and block.instrs and (addr, part) in self.addrp_to_block:
+                goto_block, block_i = self.addrp_to_block[(addr, part)]
+                if block_i:
+                    self._block_remove_instrs(goto_block, block_i)
+                    cur_con = deepcopy(self.block_to_constraint[goto_block])
+                    for instr in goto_block.instrs:
+                        cur_con.step(instr)
+                    goto_block.children = (Block(),)
+                    self.edges.add((goto_block, goto_block.children[0]))
+                    goto_block = goto_block.children[0]
+                    self.block_to_constraint[goto_block] = cur_con
+                block.children = (goto_block,)
+                self.edges.add((block, goto_block))
+                goto_con = self.block_to_constraint[goto_block]
+                prev_goto_con = deepcopy(goto_con)
+                goto_con.widen(con)
+                if block_i or goto_con != prev_goto_con:
+                    self._block_remove_instrs(goto_block, 0)
+                    self.edges.add((block, goto_block))
+                    self.stack.append((part, goto_block))
                 break
 
             if is_part_end:
@@ -146,11 +129,11 @@ class FuncExtract:
         block, con = Block(), self.start_constraint
         con.step(('eip', '=', self.start_addr))
         self.block_to_constraint[block] = deepcopy(con)
-        self.block_to_addrp[block].add((self.start_addr, 0))
-        self.addrp_to_block[(self.start_addr, 0)] = block
         self.stack.append((0, block))
         while self.stack:
             self._extract_block(*self.stack.pop())
+        for parent in block.dfs():
+            parent.children = tuple(child for child in parent.children if (parent, child) in self.edges)
         self.funcs[self.start_addr] = Function(self.start_addr, block), self.end_constraint
 
 

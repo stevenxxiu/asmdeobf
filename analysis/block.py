@@ -69,6 +69,8 @@ class Block:
         for child in value:
             child.parents.add(self)
         self._children = value
+        if len(value) < 2:
+            self.condition = None
 
     def dfs(self):
         '''

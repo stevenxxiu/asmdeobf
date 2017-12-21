@@ -78,36 +78,6 @@ with description('FuncExtract'):
                 ], 'children': (1,),
             }])))
 
-        with it(
-            'keeps and steps all jcc instructions when jmping immediately after the jcc, note the non-branching part '
-            'is explored first'
-        ):
-            r = MockRadare(textwrap.dedent('''
-                zf,?{,101,eip,=,},0,eax,=
-                1,eax,=
-                101,eip,=
-            ''').strip().split('\n'), 100)
-            expect(
-                extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
-            ).to(eq_func(to_func(100, [{
-                'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
-                    ('eip', '=', 101),
-                ], 'condition': 'zf', 'children': (1, 3),
-            }, {
-                'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
-                    ('eip', '=', 101),
-                ], 'children': (2,),
-            }, {
-                'addr_sizes': {(i, 1) for i in range(101, 103)}, 'instrs': [
-                    ('eip', '=', 102), ('eax', '=', 1),
-                    ('eip', '=', 103), ('eip', '=', 101),
-                ], 'children': (2,),
-            }, {
-                'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
-                    ('eax', '=', 0),
-                ], 'children': (2,),
-            }])))
-
     with it('ignores conditional jmps if the constraint is unsatisfiable'):
         r = MockRadare(textwrap.dedent('''
             eax,eax,^=,$z,zf,=
