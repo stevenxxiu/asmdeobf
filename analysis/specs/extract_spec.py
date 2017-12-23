@@ -129,21 +129,30 @@ with description('FuncExtract'):
             ], 'children': (1,),
         }])))
 
-#     with it('adds flag constraints to conditional jmp targets'):
-#         r = MockRadare(textwrap.dedent('''
-#             zf,?{,102,eip,=,}
-#             zf,?{,200,eip,=,}
-#             esp,[4],eip,=,4,esp,+=
-#         ''').strip().split('\n'), 100)
-#         func = FuncsExtract(r).extract_funcs(100, ConstConstraint())[100][0]
-#         expect(func.blocks).to(equal({
-#             100: Block([
-#                 '101,eip,=,zf,?{,102,eip,=,}',
-#             ], [102, 101], ('zf', 0)),
-#             101: Block([
-#                 '102,eip,=,zf,?{,200,eip,=,}',
-#             ], [102]),
-#             102: Block([
-#                 '103,eip,=,esp,[4],eip,=,4,esp,+=',
-#             ], []),
-#         }))
+    with it('updates branch constraints on conditional jmp'):
+        r = MockRadare(textwrap.dedent('''
+            zf,?{,102,eip,=,}
+            zf,?{,200,eip,=,}
+            esp,[4],eip,=,4,esp,+=
+        ''').strip().split('\n'), 100)
+        expect(
+            extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
+        ).to(eq_func(to_func(100, [{
+            'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
+                ('eip', '=', 101),
+            ], 'condition': 'zf', 'children': (1, 3),
+        }, {
+            'addr_sizes': {(i, 1) for i in range(100, 101)}, 'instrs': [
+                ('eip', '=', 102),
+            ], 'children': (2,),
+        }, {
+            'addr_sizes': {(i, 1) for i in range(102, 103)}, 'instrs': [
+                ('eip', '=', 103), ('tmp_0', '=[4]', 'esp'), ('eip', '=', 'tmp_0'), ('esp', '=', '+', 'esp', 4),
+            ],
+        }, {
+            'addr_sizes': {(i, 1) for i in range(100, 102)}, 'instrs': [
+                ('eip', '=', 102),
+            ], 'children': (4,),
+        }, {
+            'addr_sizes': {(i, 1) for i in range(101, 102)}, 'instrs': [], 'children': (2,),
+        }])))
