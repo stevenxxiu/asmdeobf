@@ -85,6 +85,9 @@ class FuncExtract:
                     con = self.block_to_constraint[goto_block]
                     self.block_to_constraint[goto_block] = DisjunctConstConstraint()
                     propagate_blocks.append((goto_block, 0, con))
+                    for i, (cur_block, cur_block_i, cur_con) in enumerate(propagate_blocks):
+                        if cur_block == goto_block and cur_block_i >= len(goto_block.instrs):
+                            propagate_blocks[i] = (lower_half, cur_block_i - len(goto_block.instrs), cur_con)
                     self.visited.add(lower_half)
                     if block == goto_block:
                         block = lower_half
@@ -100,7 +103,7 @@ class FuncExtract:
         '''
         explore_blocks = OrderedSet()
         while propagate_blocks:
-            block, block_i, con = propagate_blocks.pop(0)
+            block, block_i, con = propagate_blocks.pop()
             if block_i == 0:
                 if block in self.block_to_constraint:
                     prev_con = self.block_to_constraint[block]
@@ -134,7 +137,7 @@ class FuncExtract:
             for cur_block in explore_blocks:
                 self._explore_block(cur_block, propagate_blocks)
                 self.visited.add(cur_block)
-            explore_blocks = self._propagate_constraints(propagate_blocks)
+            explore_blocks = self._propagate_constraints(propagate_blocks[::-1])
         for parent in block.dfs():
             parent.children = tuple(child for child in parent.children if child in self.visited)
         self.funcs[self.start_addr] = Function(self.start_addr, block), self.end_constraint

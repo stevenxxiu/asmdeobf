@@ -43,7 +43,6 @@ with description('FuncExtract'):
             0,eax,=
             0,eax,=
             101,eip,=
-            esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         expect(
             extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
@@ -63,7 +62,6 @@ with description('FuncExtract'):
             0,eax,=
             1,eax,=
             101,eip,=
-            esp,[4],eip,=,4,esp,+=
         ''').strip().split('\n'), 100)
         expect(
             extract_funcs(r, 100, DisjunctConstConstraint.from_func_init())[100][0]
