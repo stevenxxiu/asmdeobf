@@ -276,7 +276,6 @@ class DisjunctConstConstraint:
 
     def widen(self, other):
         self.const_cons.extend(other.const_cons)
-        self.finalize()
 
     def step(self, instr):
         if instr[0] not in self.flags:

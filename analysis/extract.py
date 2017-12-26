@@ -82,9 +82,8 @@ class FuncExtract:
                         if key in self.addr_to_block.inv:
                             self.addr_to_block.inv[(lower_half, i)] = self.addr_to_block.inv.pop(key)
                     goto_block.children = (lower_half,)
-                    con = self.block_to_constraint[goto_block]
+                    propagate_blocks.append((goto_block, 0, self.block_to_constraint[goto_block]))
                     self.block_to_constraint[goto_block] = DisjunctConstConstraint()
-                    propagate_blocks.append((goto_block, 0, con))
                     for i, (cur_block, cur_block_i, cur_con) in enumerate(propagate_blocks):
                         if cur_block == goto_block and cur_block_i >= len(goto_block.instrs):
                             propagate_blocks[i] = (lower_half, cur_block_i - len(goto_block.instrs), cur_con)
@@ -103,13 +102,16 @@ class FuncExtract:
         '''
         explore_blocks = OrderedSet()
         while propagate_blocks:
-            block, block_i, con = propagate_blocks.pop()
+            block, block_i, con = propagate_blocks.pop(0)
             if block_i == 0:
                 if block in self.block_to_constraint:
                     prev_con = self.block_to_constraint[block]
                     con.widen(prev_con)
+                    con.finalize()
                     if con == prev_con:
                         continue
+                else:
+                    con.finalize()
                 self.block_to_constraint[block] = deepcopy(con)
             if block not in self.visited:
                 explore_blocks.add(block)
@@ -122,10 +124,10 @@ class FuncExtract:
                     # explore remaining code first before exploring jmp
                     cur_con.solve(block.condition, [True, False][i])
                 if cur_con.const_cons:
-                    cur_con.finalize()
                     propagate_blocks.append((child, 0, cur_con))
-            if not block.children:
+            if block in self.visited and not block.children:
                 self.end_constraint.widen(con)
+                self.end_constraint.finalize()
         return explore_blocks
 
     def extract(self):
@@ -137,7 +139,7 @@ class FuncExtract:
             for cur_block in explore_blocks:
                 self._explore_block(cur_block, propagate_blocks)
                 self.visited.add(cur_block)
-            explore_blocks = self._propagate_constraints(propagate_blocks[::-1])
+            explore_blocks = self._propagate_constraints(propagate_blocks)
         for parent in block.dfs():
             parent.children = tuple(child for child in parent.children if child in self.visited)
         self.funcs[self.start_addr] = Function(self.start_addr, block), self.end_constraint

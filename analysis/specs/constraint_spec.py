@@ -364,12 +364,11 @@ with description('DisjunctConstConstraint'):
             ]))
 
     with description('widens'):
-        with it('merges and finalizes'):
+        with it('merges by appending'):
             c = DisjunctConstConstraint([ConstConstraint({'eax': 1, 'tmp': 2})])
             c.widen(DisjunctConstConstraint([ConstConstraint({'eax': 1, 'tmp': 2})]))
-            c.finalize()
             expect(c).to(equal(DisjunctConstConstraint([
-                ConstConstraint({'eax': 1}),
+                ConstConstraint({'eax': 1, 'tmp': 2}), ConstConstraint({'eax': 1, 'tmp': 2})
             ])))
 
     with description('step_api_jmp'):
@@ -385,7 +384,7 @@ with description('DisjunctConstConstraint'):
             c.finalize()
             expect(c).to(equal(DisjunctConstConstraint([])))
 
-        with it('widens all non-flag constraints'):
+        with it('removes all non-flag constraints'):
             c = DisjunctConstConstraint([
                 ConstConstraint({'eax': 1, 'ebx': 2}),
                 ConstConstraint({'eax': 1, 'ebx': 3}),
