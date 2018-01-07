@@ -116,11 +116,16 @@ class ESILToFunc:
             elif part == '--=':
                 src = self.instr_stack.pop()
                 block.instrs.append((src, '=', '-', src, 1))
+            elif part == '==':
+                src_1 = self.instr_stack.pop()
+                src_2 = self.instr_stack.pop()
+                block.instrs.append((f'tmp_{tmp_num}', '=', part, src_1, src_2))
+                tmp_num += 1
             elif part in ('&=', '|=', '^=', '+=', '-=', '*=', '/='):
                 dest = self.instr_stack.pop()
                 src = self.instr_stack.pop()
                 block.instrs.append((dest, '=', part[:-1], dest, src))
-            elif part in ('&', '|', '^', '+', '-', '==', '*', '/'):
+            elif part in ('&', '|', '^', '+', '-', '*', '/'):
                 src_1 = self.instr_stack.pop()
                 src_2 = self.instr_stack.pop()
                 block.instrs.append((f'tmp_{tmp_num}', '=', part, src_1, src_2))

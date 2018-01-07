@@ -86,6 +86,13 @@ with description('ESILToFunc'):
                 ('eax', '=', '-', 'eax', 1),
             ]}])))
 
+        with it('converts =='):
+            expect(ESILToFunc(
+                'ebx,eax,==', 0, 4
+            ).convert()).to(eq_func(to_func(0, [{'addr_sizes': {(0, 4)}, 'instrs': [
+                ('tmp_0', '=', '==', 'eax', 'ebx'),
+            ]}])))
+
         with it('converts binary assigns'):
             expect(ESILToFunc(
                 '1,eax,+=', 0, 4
@@ -93,7 +100,7 @@ with description('ESILToFunc'):
                 ('eax', '=', '+', 'eax', 1),
             ]}])))
 
-        with it('converts binray operations'):
+        with it('converts binary operations'):
             expect(ESILToFunc(
                 'ebx,eax,+,ecx,=', 0, 4
             ).convert()).to(eq_func(to_func(0, [{'addr_sizes': {(0, 4)}, 'instrs': [
