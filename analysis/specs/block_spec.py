@@ -25,7 +25,7 @@ with description('Block'):
                 eax = 0x1
                 eax = ! 0x1
                 eax = ebx + 0x1
-                jmp to somelib.somemethod
+                jmp to somelib!somemethod
                 jmp left if tmp_0
             ''').strip()))
 

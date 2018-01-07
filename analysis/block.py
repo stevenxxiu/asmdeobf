@@ -40,7 +40,7 @@ class Block:
             else:
                 raise ValueError
         if self.call:
-            lines.append(f'jmp to {self.call[0]}.{self.call[1]}')
+            lines.append(f'jmp to {self.call[0]}!{self.call[1]}')
         if self.condition:
             lines.append(f'jmp left if {self.condition}')
         return '\n'.join(lines)
