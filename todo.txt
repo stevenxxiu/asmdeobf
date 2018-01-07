@@ -1,6 +1,4 @@
 
-- first block's stack is incorrect
-- first block's eax is incorrect
 - remove useless instructions, such as 'eax = eax'
 - func_merge_single_children() and func_remove_same_children() should consider cases where the child has multiple parents
 - handle proc calls (analyze function if not already analyzed, and re-run functions which are in-lined)

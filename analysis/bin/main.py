@@ -56,7 +56,7 @@ def main():
         funcs_3 = extract_funcs(r, 0x00401DC7, funcs_2[0x00401D77][1], end_addrs=(0x00401E73,))
 
         # pretty-print
-        funcs_1[0x00401D6C][0].block.merge(funcs_3.pop(0x00401DC7)[0].block)
+        list(funcs_1[0x00401D6C][0].block.dfs())[-1].children = (funcs_3.pop(0x00401DC7)[0].block,)
         process_funcs(funcs_1)
 
     finally:
