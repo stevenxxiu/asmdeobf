@@ -336,7 +336,7 @@ def sa_dead_code_elim(instrs, useful_regs):
                     tainted_vars.add(part)
     # only include instructions which write to tainted vars
     for instr in instrs:
-        if instr[0] in tainted_vars:
+        if instr[0] in tainted_vars or isinstance(instr[0], int):
             instrs_new.append(instr)
     return instrs_new
 

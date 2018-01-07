@@ -1,5 +1,4 @@
 
-- memory modification to 0x00402AD5 is skipped
 - remove useless instructions, such as 'eax = eax'
 - handle proc calls (analyze function if not already analyzed, and re-run functions which are in-lined)
 - Allow manually specifying functions to be inlined. This is necessary in order to prevent duplicate code blocks from being run.
