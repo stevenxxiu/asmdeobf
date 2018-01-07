@@ -138,7 +138,9 @@ def ssa_to_sa(instrs):
                 final_vars[instr[0].split('_')[0]] = instr[0]
     var_map_sa = {name: name_part for name_part, name in itertools.chain(init_vars.items(), final_vars.items())}
     for instr in instrs:
-        instrs_new.append(tuple(var_map_sa.get(part, part) for part in instr))
+        instr = tuple(var_map_sa.get(part, part) for part in instr)
+        if not (instr[1] == '=' and instr[0] == instr[2]):
+            instrs_new.append(instr)
     return instrs_new, {name: var_map_sa.get(val, val) for name, val in var_map_ssa.items()}
 
 

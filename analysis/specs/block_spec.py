@@ -147,6 +147,11 @@ with description('ssa_to_sa'):
             ('eax', '=', 'ebx'),
         ], {'eax_1': 'eax', 'eax_2': 'eax_1', 'eax_3': 'eax', 'ebx_1': 'ebx', 'ebx_2': 'ebx', 'ecx_1': 'ecx'})))
 
+    with it('ignores registers which are not modified'):
+        expect(ssa_to_sa([
+            ('eax_1', '=', 'eax_0'),
+        ])[0]).to(equal(([])))
+
 with description('sa_expr_simp'):
     with it('simplifies xor same register to 0'):
         expect(sa_expr_simp([
