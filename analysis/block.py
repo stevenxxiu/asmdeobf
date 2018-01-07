@@ -18,6 +18,7 @@ class Block:
         '''
         self.addr_sizes = set(addr_sizes)
         self.instrs = instrs or []
+        self.call = None
         self.condition = None
         self.parents = set()  # should not be modified directly by users
         self._children = ()
@@ -26,19 +27,23 @@ class Block:
         return id(self)
 
     def __str__(self):
-        instrs_new = []
+        lines = []
         for instr in self.instrs:
             parts = [f'0x{part:x}' if isinstance(part, int) else part for part in instr]
             arity = len(parts) - 3
             if arity == 0:
-                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]}')
+                lines.append(f'{parts[0]} {parts[1]} {parts[2]}')
             elif arity == 1:
-                instrs_new.append(f'{parts[0]} {parts[1]} {parts[2]} {parts[3]}')
+                lines.append(f'{parts[0]} {parts[1]} {parts[2]} {parts[3]}')
             elif arity == 2:
-                instrs_new.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
+                lines.append(f'{parts[0]} {parts[1]} {parts[3]} {parts[2]} {parts[4]}')
             else:
                 raise ValueError
-        return '\n'.join(instrs_new)
+        if self.call:
+            lines.append(f'jmp to {self.call[0]}.{self.call[1]}')
+        if self.condition:
+            lines.append(f'jmp left if {self.condition}')
+        return '\n'.join(lines)
 
     def split(self, i, addr_i=None):
         lower_half = Block(addr_sizes=self.addr_sizes, instrs=self.instrs[i:])

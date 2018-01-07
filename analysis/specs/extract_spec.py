@@ -22,20 +22,37 @@ with description('FuncExtract'):
             ])))
             expect(propagate_blocks).to(equal([(block, 2, DCon([CCon({'eip': 101, 'eax': 0})]))]))
 
-        with it('appends new instructions to block and ends if return address is variable'):
+        with it('appends new instructions'):
             block, propagate_blocks = Block(), []
-            e = FuncExtract(MockRadare(textwrap.dedent('''
-                0,eax,=
-                ebx,eip,=,1,eax,=
-                2,eax,=
-            ''').strip().split('\n'), 100), None, {}, None, ())
+            e = FuncExtract(MockRadare(['0,eax,='], 100), None, {}, None, (101,))
             e.block_to_constraint[block] = DCon([CCon({'eip': 100})])
             e._explore_block(block, propagate_blocks)
-            expect(block).to(eq_block(Block({(100, 1), (101, 1)}, [
+            expect(block).to(eq_block(Block({(100, 1)}, [
                 ('eip', '=', 101), ('eax', '=', 0),
-                ('eip', '=', 102), ('eip', '=', 'ebx'), ('eax', '=', 1)
             ])))
-            expect(propagate_blocks).to(equal([(block, 5, DCon([CCon({'eax': 1})]))]))
+            expect(propagate_blocks).to(equal([(block, 2, DCon([CCon({'eip': 101, 'eax': 0})]))]))
+
+        with it('ends if return address is variable'):
+            block, propagate_blocks = Block(set(), [
+                ('eip', '=', 'eax'),
+            ]), []
+            e = FuncExtract(MockRadare([], 100), None, {}, None, ())
+            e.block_to_constraint[block] = DCon([CCon({'eip': 100})])
+            e._explore_block(block, propagate_blocks)
+            expect(propagate_blocks).to(equal([(block, 1, DCon([CCon()]))]))
+
+        with it('ends if there is an api call'):
+            block, propagate_blocks = Block(set(), [
+                ('tmp_0', '=[4]', 200),
+                ('eip', '=', 'tmp_0'),
+            ]), []
+            e = FuncExtract(MockRadare([], 100), None, {}, None, ())
+            e.block_to_constraint[block] = DCon([CCon({'eip': 100})])
+            e._explore_block(block, propagate_blocks)
+            expect(block.instrs).to(equal([]))
+            expect(block.call).to(equal(('somelib', 'somemethod')))
+            expect(block.children[0]).to(eq_block(Block()))
+            expect(propagate_blocks).to(equal([(block, 0, DCon([CCon()]))]))
 
         with context('address already found'):
             with before.each:

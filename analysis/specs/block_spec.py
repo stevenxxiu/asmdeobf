@@ -14,14 +14,19 @@ from analysis.specs._utils import to_blocks
 with description('Block'):
     with description('__str__'):
         with it('converts to str'):
-            expect(str(Block(instrs=[
+            block = Block(instrs=[
                 ('eax', '=', 1),
                 ('eax', '=', '!', 1),
                 ('eax', '=', '+', 'ebx', 1),
-            ]))).to(equal(dedent('''
+            ])
+            block.call = ('somelib', 'somemethod')
+            block.condition = 'tmp_0'
+            expect(str(block)).to(equal(dedent('''
                 eax = 0x1
                 eax = ! 0x1
                 eax = ebx + 0x1
+                jmp to somelib.somemethod
+                jmp left if tmp_0
             ''').strip()))
 
         with it('raises ValueError on unknown op arity'):

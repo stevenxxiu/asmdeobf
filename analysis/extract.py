@@ -1,3 +1,4 @@
+import re
 from copy import deepcopy
 
 from bidict import bidict
@@ -35,30 +36,6 @@ class FuncExtract:
         self.addr_to_block[addr] = (block, len(block.instrs))
         block.merge(func.block)
 
-    def _step(self, block, block_i, con):
-        # # instruction is a call to api
-        # matches = re.match(r'(\d+),eip,=,eip,4,esp,-=,esp,=\[\],(\d+),eip,=', instr)
-        # if matches:
-        #     ret_addr, call_addr = matches.group(1), matches.group(2)
-        #     matches = re.match(r'(0x\d+),\[\],eip,=', self.r.cmdj(f'pdj 1 @ {call_addr}')[0]['esil'])
-        #     if matches:
-        #         api_addr = matches.group(1)
-        #         matches = re.match(r'sym\.imp\.(\S+)_(\S+)$', self.r.cmd(f'fd {api_addr}'))
-        #         if matches:
-        #             # end current block to aid in de-obfuscation
-        #             lib_name, api_name = matches.group(1), matches.group(2)
-        #             state.step_api_jmp(lib_name, api_name)
-        #             self._stack_append(int(ret_addr), state)
-        #             block.children = [int(ret_addr)]
-        #             break
-
-        # instruction is a call to a proc
-        # function was already analyzed
-
-        # step
-        con.step(block.instrs[block_i])
-        return block_i + 1
-
     def _explore_block(self, block, propagate_blocks):
         '''
         Add instructions to block until we hit the end or a previous instruction.
@@ -66,12 +43,26 @@ class FuncExtract:
         con = deepcopy(self.block_to_constraint[block])
         block_i = 0
         while True:
-            while block_i != len(block.instrs):
-                block_i = self._step(block, block_i, con)
+            # run instruction
+            for instr in block.instrs[block_i:]:
+                con.step(instr)
+            block_i = len(block.instrs)
             addr = con.const_cons[0].vars.get('eip', None)
+
+            # instruction is an api call
+            if len(block.instrs) >= 2 and block.instrs[-1] == ('eip', '=', 'tmp_0'):
+                api_addr = block.instrs[-2][2]
+                block.instrs = block.instrs[:-2]
+                block.call = re.match(r'sym\.imp\.(\S+)_(\S+)$', self.r.cmd(f'fd {api_addr}')).groups()
+                block.children = (Block(),)
+                propagate_blocks.append((block, len(block.instrs), con))
+                return
+
+            # address ends block
             if block.children or (not isinstance(addr, int) or addr in self.end_addrs):
                 propagate_blocks.append((block, len(block.instrs), con))
                 return
+
             # address is already found (can happen due to jmps)
             if addr in self.addr_to_block:
                 goto_block, block_i = self.addr_to_block[addr]
@@ -94,6 +85,8 @@ class FuncExtract:
                 block.children = (goto_block,)
                 propagate_blocks.append((goto_block, 0, con))
                 return
+
+            # append new instruction
             self._block_append_instr(block, addr)
 
     def _propagate_constraints(self, propagate_blocks):
@@ -116,8 +109,8 @@ class FuncExtract:
             if block not in self.visited:
                 explore_blocks.add(block)
                 continue
-            while block_i != len(block.instrs):
-                block_i = self._step(block, block_i, con)
+            for instr in block.instrs[block_i:]:
+                con.step(instr)
             for i, child in enumerate(block.children):
                 cur_con = deepcopy(con)
                 if block.condition:

@@ -113,13 +113,15 @@ with description('ESILToFunc'):
 
         with it('converts memory reads'):
             expect(ESILToFunc(
+                'eax,[],ebx,=,'
                 'eax,[1],ebx,=,'
                 'eax,[2],ebx,=,'
                 'eax,[4],ebx,=', 0, 4
             ).convert()).to(eq_func(to_func(0, [{'addr_sizes': {(0, 4)}, 'instrs': [
-                ('tmp_0', '=[1]', 'eax'), ('ebx', '=', 'tmp_0'),
-                ('tmp_1', '=[2]', 'eax'), ('ebx', '=', 'tmp_1'),
-                ('tmp_2', '=[4]', 'eax'), ('ebx', '=', 'tmp_2'),
+                ('tmp_0', '=[4]', 'eax'), ('ebx', '=', 'tmp_0'),
+                ('tmp_1', '=[1]', 'eax'), ('ebx', '=', 'tmp_1'),
+                ('tmp_2', '=[2]', 'eax'), ('ebx', '=', 'tmp_2'),
+                ('tmp_3', '=[4]', 'eax'), ('ebx', '=', 'tmp_3'),
             ]}])))
 
         with it('converts memory writes'):

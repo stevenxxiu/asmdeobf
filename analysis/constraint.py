@@ -209,6 +209,8 @@ class ConstConstraint:
         stack_change = win_api.get_stack_change(lib_name, api_name) + 4
         val = self.vars.get('esp', None)
         if isinstance(val, tuple) and val[0] == 'esp_0':
+            if (-stack_change, 4) in self.stack.values:
+                self.vars['eip'] = self.stack.values[(-stack_change, 4)]
             for mem_offset, mem_size in list(self.stack.values):
                 if mem_offset < val[1] + stack_change:
                     self.stack.values.pop((mem_offset, mem_size))

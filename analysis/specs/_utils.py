@@ -97,6 +97,9 @@ class MockRadare:
         matches = re.match(r'e ', cmd)
         if matches:
             return
+        matches = re.match(r'fd (\d+)', cmd)
+        if matches:
+            return 'sym.imp.somelib_somemethod'
         raise ValueError('cmd', cmd)
 
     def cmdj(self, cmd):

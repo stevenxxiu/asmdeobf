@@ -126,9 +126,10 @@ class ESILToFunc:
                 block.instrs.append((f'tmp_{tmp_num}', '=', part, src_1, src_2))
                 self.instr_stack.append(f'tmp_{tmp_num}')
                 tmp_num += 1
-            elif part in ('[1]', '[2]', '[4]'):
+            elif part in ('[]', '[1]', '[2]', '[4]'):
                 # read from memory
-                block.instrs.append((f'tmp_{tmp_num}', f'={part}', self.instr_stack.pop()))
+                size = part[1:-1] or '4'
+                block.instrs.append((f'tmp_{tmp_num}', f'=[{size}]', self.instr_stack.pop()))
                 self.instr_stack.append(f'tmp_{tmp_num}')
                 tmp_num += 1
             elif part.startswith('=['):

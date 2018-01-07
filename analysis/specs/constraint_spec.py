@@ -288,30 +288,36 @@ with description('ConstConstraint'):
             self.patcher.__exit__()
 
         with it('invalidates registers'):
-            self.c.step_api_jmp('some_lib', 'some_method')
+            self.c.step_api_jmp('somelib', 'somemethod')
             expect(self.c.vars).to_not(have_key('eax'))
+
+        with it('updates eip'):
+            self.c.stack.values[(-4, 4)] = 1
+            self.c.vars['esp'] = ('esp_0', 0)
+            self.c.step_api_jmp('somelib', 'somemethod')
+            expect(self.c.vars).to(have_key('eip', 1))
 
         with it('updates esp'):
             self.c.vars['esp'] = ('esp_0', 0)
-            self.c.step_api_jmp('some_lib', 'some_method')
+            self.c.step_api_jmp('somelib', 'somemethod')
             expect(self.c.vars).to(have_key('esp', ('esp_0', 4)))
 
         with it('invalidates overlapping stack values since can be changed by call'):
             self.c.stack.values[(-5, 4)] = 1
             self.c.stack.values[(-4, 4)] = 2
             self.c.vars['esp'] = ('esp_0', -8)
-            self.c.step_api_jmp('some_lib', 'some_method')
+            self.c.step_api_jmp('somelib', 'somemethod')
             expect(self.c.stack.values).to(equal({(-4, 4): 2}))
 
         with it('invalidates all stack values if esp is unknown'):
             self.c.stack.values[(0, 4)] = 1
             self.c.vars['esp'] = ('eax_0', 0)
-            self.c.step_api_jmp('some_lib', 'some_method')
+            self.c.step_api_jmp('somelib', 'somemethod')
             expect(self.c.stack.values).to(equal({}))
 
         with it('invalidates memory'):
             self.c.mem.values[(0, 4)] = 1
-            self.c.step_api_jmp('some_lib', 'some_method')
+            self.c.step_api_jmp('somelib', 'somemethod')
             expect(self.c.mem.values).to(equal({}))
 
 with description('DisjunctConstConstraint'):
@@ -375,7 +381,7 @@ with description('DisjunctConstConstraint'):
         with it('calls step_api_jmp for each const constraint'):
             with patch('analysis.constraint.ConstConstraint.step_api_jmp') as step_api_jmp:
                 c = DisjunctConstConstraint([ConstConstraint({'eax': 1}), ConstConstraint({'eax': 2})])
-                c.step_api_jmp('some_lib', 'some_method')
+                c.step_api_jmp('somelib', 'somemethod')
                 expect(step_api_jmp.call_count).to(equal(2))
 
     with description('finalize'):
