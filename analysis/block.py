@@ -166,6 +166,14 @@ def sa_expr_simp(instrs):
         instrs_new.append(instr)
     instrs = instrs_new
 
+    # simplify expressions involving `r1 - r1`
+    instrs_new = []
+    for instr in instrs:
+        if instr[2] == '-' and instr[3] == instr[4]:
+            instr = instr[:2] + (0,)
+        instrs_new.append(instr)
+    instrs = instrs_new
+
     # simplify expressions involving `r1 + 1`, `r1 - 1`
     instrs_new = []
     var_map = {}

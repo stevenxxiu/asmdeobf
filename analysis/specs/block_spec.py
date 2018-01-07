@@ -155,7 +155,7 @@ with description('sa_expr_simp'):
             ('r2', '=', 0),
         ]))
 
-    with it('simplifies xor expressions'):
+    with it('simplify expressions involving `r1 ^ r2`'):
         expect(sa_expr_simp([
             ('r3', '=', '^', 'r1', 'r2'),
             ('r4', '=', '^', 'r3', 'r1'),
@@ -164,7 +164,14 @@ with description('sa_expr_simp'):
             ('r4', '=', 'r2'),
         ]))
 
-    with it('simplifies additions'):
+    with it('simplify expressions involving `r1 - r1`'):
+        expect(sa_expr_simp([
+            ('r2', '=', '-', 'r1', 'r1'),
+        ])).to(equal([
+            ('r2', '=', 0),
+        ]))
+
+    with it('simplify expressions involving `r1 + 1`, `r1 - 1`'):
         expect(sa_expr_simp([
             ('r2', '=', '+', 'r1', 1),
             ('r3', '=', '+', 'r2', 1),
