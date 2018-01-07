@@ -40,22 +40,24 @@ def main():
         initial_vars = r.cmdj(f'aerj')
 
         # first decrypt loop
-        funcs = extract_funcs(r, 0x00401BB4, DisjunctConstConstraint.from_oep(), end_addrs=(0x00401D6C,))
-        update_radare_state(r, funcs[0x00401BB4][1], initial_vars)
+        funcs_0 = extract_funcs(r, 0x00401BB4, DisjunctConstConstraint.from_oep(), end_addrs=(0x00401D6C,))
+        update_radare_state(r, funcs_0[0x00401BB4][1], initial_vars)
         r.cmd('e.aecu 0x00401D6C')
 
         # code
-        funcs = extract_funcs(r, 0x00401D6C, funcs[0x00401BB4][1], end_addrs=(0x00401D77,))
-        process_funcs(funcs)
+        funcs_1 = extract_funcs(r, 0x00401D6C, funcs_0[0x00401BB4][1], end_addrs=(0x00401D77,))
 
         # second decrypt loop
-        funcs = extract_funcs(r, 0x00401D77, funcs[0x00401D6C][1], end_addrs=(0x00401DC7,))
-        update_radare_state(r, funcs[0x00401D77][1], initial_vars)
+        funcs_2 = extract_funcs(r, 0x00401D77, funcs_1[0x00401D6C][1], end_addrs=(0x00401DC7,))
+        update_radare_state(r, funcs_2[0x00401D77][1], initial_vars)
         r.cmd('e.aecu 0x00401DC7')
 
         # code
-        funcs = extract_funcs(r, 0x00401DC7, funcs[0x00401D77][1], end_addrs=(0x00401E73,))
-        process_funcs(funcs)
+        funcs_3 = extract_funcs(r, 0x00401DC7, funcs_2[0x00401D77][1], end_addrs=(0x00401E73,))
+
+        # pretty-print
+        funcs_1[0x00401D6C][0].block.merge(funcs_3.pop(0x00401DC7)[0].block)
+        process_funcs(funcs_1)
 
     finally:
         r.quit()

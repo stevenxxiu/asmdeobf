@@ -1,5 +1,4 @@
 
-- in main, merge the two functions after unpacking
 - memory modification to 0x00402AD5 is skipped
 - remove useless instructions, such as 'eax = eax'
 - run main.py to see what is still broken, and simplify cfg which has same blocks of instructions
