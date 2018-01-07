@@ -217,8 +217,8 @@ def func_remove_same_children(func):
         if len(block.children) == 2:
             child_1, child_2 = block.children
             if (
-                child_1.instrs == child_2.instrs and child_1.children == child_2.children and
-                child_1.condition == child_2.condition
+                child_1.instrs == child_2.instrs and child_1.call == child_2.call and
+                child_1.condition == child_2.condition and child_1.children == child_2.children
             ):
                 child_1.addr_sizes.update(child_2.addr_sizes)
                 block.merge(child_1)
