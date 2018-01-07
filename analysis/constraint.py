@@ -124,7 +124,7 @@ class ConstConstraint:
                 val = val_1 | val_2
         elif instr[2] == '^':
             val_1, val_2 = self._read_var(instr[3]), self._read_var(instr[4])
-            if instr[3] == instr[4]:
+            if val_1 == val_2 or instr[3] == instr[4]:
                 val = 0
             elif isinstance(val_1, int) and isinstance(val_2, int):
                 val = val_1 ^ val_2
@@ -138,7 +138,9 @@ class ConstConstraint:
                 val = (val_1[0], val_1[1] + val_2)
         elif instr[2] in ('==', '-'):
             val_1, val_2 = self._read_var(instr[3]), self._read_var(instr[4])
-            if isinstance(val_1, int) and isinstance(val_2, int):
+            if val_1 == val_2 or instr[3] == instr[4]:
+                val = 0
+            elif isinstance(val_1, int) and isinstance(val_2, int):
                 val = val_1 - val_2
             elif isinstance(val_1, tuple) and isinstance(val_2, int):
                 val = (val_1[0], val_1[1] - val_2)

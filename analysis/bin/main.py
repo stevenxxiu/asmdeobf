@@ -1,7 +1,7 @@
 import r2pipe
 
 from analysis.block import block_simplify
-from analysis.constraint import ConstConstraint
+from analysis.constraint import DisjunctConstConstraint
 from analysis.emu import update_radare_state
 from analysis.extract import extract_funcs
 from analysis.func import func_simplify
@@ -9,26 +9,22 @@ from analysis.func import func_simplify
 
 def process_funcs(funcs):
     # simplify func
-    for func in funcs:
+    for func, con in funcs.values():
         func_simplify(func)
 
     # de-obfuscate blocks
-    for func in funcs:
+    for func, con in funcs.values():
         for block in func.block.dfs():
             block_simplify(block)
 
     # pretty-print
-    for func in funcs:
+    for func, con in funcs.values():
         print(f'sub_{func.addr:08x}')
         for block in func.block.dfs():
-            print(f'block_{block_addr:08x}')
+            print(f'block_{min(block.addr_sizes)[0]:08x}')
             print(block)
-            if block.condition:
-                flag, is_negated = block.condition
-                true_addr, false_addr = block.children[::-1] if is_negated else block.children
-                print(f'{flag} ? {true_addr:08x} : {false_addr:08x}')
-            elif block.children:
-                print(f'{block.children[0]:08x}')
+            if block.children:
+                print('children: ' + ' '.join(f'block_{min(child.addr_sizes)[0]:08x}' for child in block.children))
             print()
 
 
@@ -36,7 +32,7 @@ def main():
     r = r2pipe.open('../../ReverseMe#8 by lena151.exe')
 
     try:
-        # enable emu writes for self-modifying code
+        # enable emu writes for decryption code
         r.cmd('aei')
         r.cmd('aeim')
         r.cmd('e asm.emuwrite=true')
@@ -44,7 +40,7 @@ def main():
         initial_vars = r.cmdj(f'aerj')
 
         # first decrypt loop
-        funcs = extract_funcs(r, 0x00401BB4, ConstConstraint.from_oep(), end_addrs=(0x00401D6C,))
+        funcs = extract_funcs(r, 0x00401BB4, DisjunctConstConstraint.from_oep(), end_addrs=(0x00401D6C,))
         update_radare_state(r, funcs[0x00401BB4][1], initial_vars)
         r.cmd('e.aecu 0x00401D6C')
 

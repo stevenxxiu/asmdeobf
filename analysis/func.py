@@ -206,6 +206,10 @@ class ESILToFunc:
         return func
 
 
+def func_merge_single_children(func):
+    pass
+
+
 def func_remove_same_children(func):
     for block in func.block.dfs():
         if len(block.children) == 2:

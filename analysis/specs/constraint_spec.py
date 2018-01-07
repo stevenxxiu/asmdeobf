@@ -173,6 +173,10 @@ with description('ConstConstraint'):
                     expect(self.c.vars).to(have_key('eax', ('esp_0', 1)))
 
             with description('sub'):
+                with it('clears var when subbing with same value'):
+                    self.c.step(('eax', '=', '-', 'eax', 'eax'))
+                    expect(self.c.vars).to(have_key('eax', 0))
+
                 with it('subs integer vars'):
                     self.c.step(('eax', '=', '-', 2, 1))
                     expect(self.c.vars).to(have_key('eax', 1))
