@@ -1,12 +1,15 @@
 import textwrap
+from unittest.mock import patch
 
 from expects import *
 
 from analysis.block import Block
-from analysis.constraint import DisjunctConstConstraint as DCon, ConstConstraint as CCon
-from analysis.extract import extract_funcs, FuncExtract
+from analysis.constraint import ConstConstraint as CCon
+from analysis.constraint import DisjunctConstConstraint as DCon
+from analysis.extract import FuncExtract, extract_funcs
 from analysis.specs._stub import *
-from analysis.specs._utils import MockRadare, eq_func, to_func, to_blocks, eq_block
+from analysis.specs._utils import MockRadare, eq_block, eq_func, to_blocks, to_func
+from analysis.winapi import win_api
 
 with description('FuncExtract'):
     with description('_explore_block (all tests makes sure explore takes place on instruction boundaries)'):
@@ -161,6 +164,18 @@ with description('FuncExtract'):
             ])
             expect(self.e.block_to_constraint).to(equal({
                 blocks[1]: DCon([CCon({'eax': 2})]),
+            }))
+
+        with it('propagates to children when there is an api call'):
+            blocks = to_blocks([{'call': ('somelib', 'somemethod'), 'children': (1,)}, {}])
+            self.e.visited = {blocks[0]}
+            with patch.object(win_api, 'get_stack_change', return_value=0):
+                self.e._propagate_constraints([
+                    (blocks[0], 0, DCon([CCon({'esp': ('esp_0', 0)}, stack_values={(-4, 4): 1})]))
+                ])
+            expect(self.e.block_to_constraint).to(equal({
+                blocks[0]: DCon([CCon({'esp': ('esp_0', 0)}, stack_values={(-4, 4): 1})]),
+                blocks[1]: DCon([CCon({'eip': 1, 'esp': ('esp_0', 4)})]),
             }))
 
         with it('propagates to children when there is a satisfiable condition'):

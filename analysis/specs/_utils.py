@@ -15,6 +15,7 @@ def to_blocks(block_defs):
         if block is not block_dfs:
             raise ValueError(f'block {i} is not sorted via dfs (needed so eq_block errors make sense)')
     for block, block_def in zip(blocks, block_defs):
+        block.call = block_def.get('call', None)
         block.condition = block_def.get('condition', None)
         block.children = tuple(blocks[i] for i in block_def.get('children', ()))
     return blocks

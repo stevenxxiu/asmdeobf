@@ -31,11 +31,11 @@ class ConstConstraint:
     }
     assign_bits = {'l': (0, 7), 'h': (8, 15), 'x': (0, 15)}
 
-    def __init__(self, vars_=None):
+    def __init__(self, vars_=None, stack_values=None):
         self.vars = vars_ or {}
         self.mem_var = 0
         self.mem = MemValues()
-        self.stack = MemValues()
+        self.stack = MemValues(stack_values)
 
     def __eq__(self, other):
         return (

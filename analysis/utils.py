@@ -4,8 +4,8 @@ def is_var(name):
 
 
 class MemValues:
-    def __init__(self):
-        self.values = {}  # {(offset, size): value}
+    def __init__(self, values=None):
+        self.values = values or {}  # {(offset, size): value}
 
     def has(self, offset, size):
         return (offset, size) in self.values

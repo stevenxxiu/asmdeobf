@@ -113,6 +113,8 @@ class FuncExtract:
                 con.step(instr)
             for i, child in enumerate(block.children):
                 cur_con = deepcopy(con)
+                if block.call:
+                    cur_con.step_api_jmp(*block.call)
                 if block.condition:
                     # explore remaining code first before exploring jmp
                     cur_con.solve(block.condition, [True, False][i])
