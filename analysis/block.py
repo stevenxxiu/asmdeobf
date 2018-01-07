@@ -58,6 +58,7 @@ class Block:
 
     def merge(self, lower_half):
         self.instrs.extend(lower_half.instrs)
+        self.call = lower_half.call
         self.condition = lower_half.condition
         self.children = lower_half.children
         self.addr_sizes.update(lower_half.addr_sizes)
