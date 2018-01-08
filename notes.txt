@@ -28,7 +28,7 @@ A mitigation to the performance problem is to instead perform block simplificati
 API calls end a block to facilitate block-by-block deobfuscation.
 
 ## Functions
-In order to identify functions, we look at when the constraints start having a different eip at the start of a block than before. In order to then identify where the call came from, we can perform taint analysis to see which operation tainted eip. This also works with identifying switch statements.
+In order to identify functions, we look at when the constraints start having a different eip at the start of a block than before. In order to then identify where the call came from, we can perform taint analysis to see which operation tainted eip.
 
 ### Inlining
 Some functions are useless and may be called multiple times, so in order to facilitate analysis (both constraint propagation and block deobfuscation), we allow inlining.
