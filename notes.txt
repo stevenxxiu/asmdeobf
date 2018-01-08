@@ -24,11 +24,14 @@ In this case, we may be tempted to use symbolic execution rather than block simp
 
 A mitigation to the performance problem is to instead perform block simplification every time there is an unknown predicate, which should not occur often.
 
-## Calls
-Calls also split a block in two to facilitate block-by-block deobfuscation.
+## API Calls
+API calls end a block to facilitate block-by-block deobfuscation.
 
-## Identifying functions
-In order to identify functions, we look at calls which have relatively large offsets (>=10). Some functions are useless, so we allow inlining. Simply ignoring these calls is not the same as inlining, since the analyzer might see them again and move them into a separate block, which hinders de-obfuscation within the same block.
+## Functions
+In order to identify functions, we look at when the constraints start having a different eip at the start of a block than before. In order to then identify where the call came from, we can perform taint analysis to see which operation tainted eip. This also works with identifying switch statements.
+
+### Inlining
+Some functions are useless and may be called multiple times, so in order to facilitate analysis (both constraint propagation and block deobfuscation), we allow inlining.
 
 # De-obfuscation after the CFG is extracted
 De-obfuscation is done on the CFG, as well as block-by-block.
