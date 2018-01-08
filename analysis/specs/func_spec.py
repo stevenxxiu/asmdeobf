@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from expects import *
 
-from analysis.func import ESILToFunc, func_remove_same_children, func_simplify, func_merge_single_children
+from analysis.func import ESILToFunc, func_merge_single_children, func_remove_same_children, func_simplify
 from analysis.specs._stub import *
 from analysis.specs._utils import eq_func, to_func
 
@@ -223,6 +223,25 @@ with description('ESILToFunc'):
         with it('raises ValueError for unknown opcodes'):
             expect(lambda: ESILToFunc('??', 0, 4).convert()).to(raise_error(ValueError))
 
+with description('func_remove_same_children'):
+    with it('replaces identical blocks with one block'):
+        func = to_func(0, [
+            {'children': (1, 2)},
+            {'children': (3,)},
+            {'addr_sizes': {(0, 4)}, 'instrs': [('eax', '=', 0)], 'children': (4, 5)},
+            {'addr_sizes': {(4, 4)}, 'instrs': [('eax', '=', 0)], 'children': (4, 5)},
+            {'instrs': [('eax', '=', 1)]},
+            {'instrs': [('eax', '=', 2)]},
+        ])
+        func_remove_same_children(func)
+        expect(func).to(eq_func(to_func(0, [
+            {'children': (1, 2)},
+            {'children': (2,)},
+            {'addr_sizes': {(0, 4), (4, 4)}, 'instrs': [('eax', '=', 0)], 'children': (3, 4)},
+            {'instrs': [('eax', '=', 1)]},
+            {'instrs': [('eax', '=', 2)]},
+        ])))
+
 with description('func_merge_single_children'):
     with it('merges blocks with single children repeatedly'):
         func = to_func(0, [
@@ -239,6 +258,19 @@ with description('func_merge_single_children'):
             ]},
         ])))
 
+    with it('does not merge blocks who share children'):
+        func = to_func(0, [
+            {'children': (2,)},
+            {'children': (2,)},
+            {},
+        ])
+        func_merge_single_children(func)
+        expect(func).to(eq_func(to_func(0, [
+            {'children': (2,)},
+            {'children': (2,)},
+            {},
+        ])))
+
     with it('does not merge blocks with calls'):
         func = to_func(0, [
             {'instrs': [('eax', '=', 0)], 'call': ('somelib', 'somemethod'), 'children': (1,)},
@@ -250,27 +282,11 @@ with description('func_merge_single_children'):
             {'instrs': [('eax', '=', 1)]},
         ])))
 
-with description('func_remove_same_children'):
-    with it('removes children which are the same'):
-        func = to_func(0, [
-            {'children': (1, 4)},
-            {'addr_sizes': {(0, 4)}, 'instrs': [('eax', '=', 0)], 'children': (2, 3)},
-            {'instrs': []},
-            {'instrs': []},
-            {'addr_sizes': {(4, 4)}, 'instrs': [('eax', '=', 0)], 'children': (2, 3)},
-        ])
-        func_remove_same_children(func)
-        expect(func).to(eq_func(to_func(0, [
-            {'addr_sizes': {(0, 4), (4, 4)}, 'instrs': [('eax', '=', 0)], 'children': (1, 2)},
-            {'instrs': []},
-            {'instrs': []},
-        ])))
-
 with description('func_simplify'):
     with it('calls simplification routines'):
         with ExitStack() as stack:
             func_simps = [stack.enter_context(patch(f'analysis.func.{name}')) for name in [
-                'func_merge_single_children', 'func_remove_same_children',
+                'func_remove_same_children', 'func_merge_single_children',
             ]]
             func_simplify(None)
             for func_simp in func_simps:

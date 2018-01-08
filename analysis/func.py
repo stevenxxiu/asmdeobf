@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from analysis.block import Block
 
 __all__ = ['Function', 'ESILToFunc', 'func_simplify']
@@ -206,24 +208,24 @@ class ESILToFunc:
         return func
 
 
+def func_remove_same_children(func):
+    id_to_dups = defaultdict(list)
+    for block in func.block.dfs():
+        id_ = (tuple(block.instrs), block.call, block.condition, block.children)
+        id_to_dups[id_].append(block)
+        id_to_dups[id_][0].addr_sizes.update(block.addr_sizes)
+    for dups in id_to_dups.values():
+        for dup in dups[1:]:
+            for parent in list(dup.parents):
+                parent.children = tuple(dups[0] if child == dup else child for child in parent.children)
+
+
 def func_merge_single_children(func):
     for block in func.block.dfs():
-        while len(block.children) == 1 and not block.call:
+        while len(block.children) == 1 and len(block.children[0].parents) == 1 and not block.call:
             block.merge(block.children[0])
 
 
-def func_remove_same_children(func):
-    for block in func.block.dfs():
-        if len(block.children) == 2:
-            child_1, child_2 = block.children
-            if (
-                child_1.instrs == child_2.instrs and child_1.call == child_2.call and
-                child_1.condition == child_2.condition and child_1.children == child_2.children
-            ):
-                child_1.addr_sizes.update(child_2.addr_sizes)
-                block.merge(child_1)
-
-
 def func_simplify(func):
-    func_merge_single_children(func)
     func_remove_same_children(func)
+    func_merge_single_children(func)
