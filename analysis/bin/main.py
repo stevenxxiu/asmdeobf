@@ -1,31 +1,39 @@
+import json
+from json import JSONEncoder
+
 import r2pipe
 
-from analysis.block import block_simplify
+from analysis.block import Block, block_simplify
 from analysis.constraint import DisjunctConstConstraint
 from analysis.emu import update_radare_state
 from analysis.extract import extract_funcs
-from analysis.func import func_simplify
+from analysis.func import Function, func_simplify
 
 
-def process_funcs(funcs):
+def simplify_funcs(funcs):
     # simplify func
     for func, con in funcs.values():
         func_simplify(func)
 
-    # de-obfuscate blocks
+    # simplify blocks
     for func, con in funcs.values():
         for block in func.block.dfs():
             block_simplify(block)
 
-    # pretty-print
-    for func, con in funcs.values():
-        print(f'sub_{func.addr:08x}')
-        for block in func.block.dfs():
-            print(f'block_{min(block.addr_sizes)[0]:08x}')
-            print(block)
-            if block.children:
-                print('children: ' + ' '.join(f'block_{min(child.addr_sizes)[0]:08x}' for child in block.children))
-            print()
+
+class FuncEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Function):
+            return obj.__dict__
+        elif isinstance(obj, Block):
+            blocks = list(obj.dfs())
+            return [{
+                'id': id(block),
+                'addr_sizes': sorted(block.addr_sizes),
+                'text': str(block),
+                'children': [id(child) for child in block.children],
+            } for block in blocks]
+        return super().default(obj)
 
 
 def main():
@@ -55,9 +63,19 @@ def main():
         # code
         funcs_3 = extract_funcs(r, 0x00401DC7, funcs_2[0x00401D77][1], end_addrs=(0x00401E73,))
 
-        # pretty-print
+        # chain code together
         list(funcs_1[0x00401D6C][0].block.dfs())[-1].children = (funcs_3.pop(0x00401DC7)[0].block,)
-        process_funcs(funcs_1)
+
+        # simplify
+        simplify_funcs(funcs_1)
+
+        # export to visualize
+        with open('../visualize/build/data.json', 'w') as sr:
+            json.dump({
+                'start': 0x401BB4,
+                'end': 0x4046DB,
+                'funcs': {addr: func for addr, (func, con) in funcs_1.items()},
+            }, sr, cls=FuncEncoder)
 
     finally:
         r.quit()
