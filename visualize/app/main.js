@@ -1,3 +1,4 @@
+import '@babel/polyfill'
 import React from 'react'
 import ReactDOM from 'react-dom'
 import {AppContainer} from 'react-hot-loader'
@@ -6,11 +7,11 @@ import {AppStore, App} from './components/app'
 
 const render = (Component) => {
   const appStore = new AppStore()
-  window.addEventListener('click', () => appStore.value = appStore.value + 1)
+  appStore.load('/data.json')
   ReactDOM.render(
     pug`
       AppContainer
-        Provider(store=appStore)
+        Provider(store=${appStore})
           Component
     `,
     document.getElementById('root'),

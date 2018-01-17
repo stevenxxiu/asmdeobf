@@ -1,15 +1,28 @@
 import React from 'react'
+import xhr from 'tiny-xhr'
 import {observable} from 'mobx'
-import {inject, observer} from 'mobx-react'
+import {NavBar, NavStore} from './navbar'
 
 export class AppStore {
-  @observable value = 1;
+  @observable selectedBlock = null;
+
+  constructor(){
+    this.navStore = new NavStore()
+  }
+
+  async load(url){
+    let response = (await xhr({
+      url: url, method: 'GET', type: 'json',
+    })).response
+    this.navStore.loadJson(response)
+  }
 }
 
-@inject('store') @observer
 export class App extends React.Component {
   render(){
-    const {store} = this.props
-    return pug`div ${store.value}`
+    return pug`
+      div
+        NavBar
+    `
   }
 }
