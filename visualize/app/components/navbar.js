@@ -8,8 +8,6 @@ const RESOLUTION = 0.5  // how much merge overlap we allow, to draw fewer canvas
 const ZOOM_FACTOR = 1.1
 
 export class NavStore {
-  @observable start = 0;
-  @observable end = 1;
   @observable viewStart = 0;
   @observable viewEnd = 1;
   @observable mouseX = null;
@@ -86,8 +84,8 @@ class NavContent extends React.Component {
     navStore.mouseX = this.mouseClip(e.pageX)
     if(navStore.dragging){
       let d = this.mouseToAddr(navStore.mouseX) - this.mouseToAddr(prevMouseX)
-      d = Math.min(d, navStore.viewStart - navStore.start)
-      d = Math.max(d, navStore.viewEnd - navStore.end)
+      d = Math.min(d, navStore.viewStart - navStore.rootStore.start)
+      d = Math.max(d, navStore.viewEnd - navStore.rootStore.end)
       navStore.viewStart -= d
       navStore.viewEnd -= d
     }
@@ -98,8 +96,8 @@ class NavContent extends React.Component {
     const initWidth = navStore.viewEnd - navStore.viewStart
     let width = initWidth * (e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)
     const addr = this.mouseToAddr(navStore.mouseX)
-    navStore.viewStart = Math.max(addr - (addr - navStore.viewStart) / initWidth * width, navStore.start)
-    navStore.viewEnd = Math.min(addr + (navStore.viewEnd - addr) / initWidth * width, navStore.end)
+    navStore.viewStart = Math.max(addr - (addr - navStore.viewStart) / initWidth * width, navStore.rootStore.start)
+    navStore.viewEnd = Math.min(addr + (navStore.viewEnd - addr) / initWidth * width, navStore.rootStore.end)
   }
 
   render(){
@@ -128,10 +126,10 @@ export class NavBar extends React.Component {
     return pug`
       .nav-bar
         .nav-ind
-          i.fa.fa-chevron-left(class=${navStore.viewStart == navStore.start ? 'inactive' : ''})
+          i.fa.fa-chevron-left(class=${navStore.viewStart == navStore.rootStore.start ? 'inactive' : ''})
         NavContent
         .nav-ind
-          i.fa.fa-chevron-right(class=${navStore.viewEnd == navStore.end ? 'inactive' : ''})
+          i.fa.fa-chevron-right(class=${navStore.viewEnd == navStore.rootStore.end ? 'inactive' : ''})
     `
   }
 }

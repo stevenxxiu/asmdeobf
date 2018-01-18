@@ -1,12 +1,14 @@
 import React from 'react'
 import xhr from 'tiny-xhr'
-import {observable} from 'mobx'
+import {observable, action} from 'mobx'
 import {NavBar, NavStore} from './navbar'
 import {FuncsStore, Funcs} from './funcs'
 import {AddrsStore, Addrs} from './addrs'
 
 export class AppStore {
   @observable funcs = {};
+  @observable start = 0;
+  @observable end = 1;
   @observable windowWidth = window.innerWidth;
   @observable windowHeight = window.innerHeight;
 
@@ -20,11 +22,13 @@ export class AppStore {
     })
   }
 
-  async load(url){
+  @action async load(url){
     let response = (await xhr({
       url: url, method: 'GET', type: 'json',
     })).response
     this.funcs = response.funcs
+    this.start = response.start
+    this.end = response.end
     this.navStore.loadJson(response)
   }
 }

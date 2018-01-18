@@ -18,16 +18,20 @@ export class AddrsStore {
     for(let addr in this.rootStore.funcs)
       for(let block of this.rootStore.funcs[addr].block)
         for(let [addr, size] of block.addr_sizes)
-          ranges.push([addr, addr + size])
+          // check if within [start, end) since api calls can be out of range
+          if(this.rootStore.start <= addr && addr + size <= this.rootStore.end)
+            ranges.push([addr, addr + size])
     const merged = mergeRanges(ranges)
     const gapped = []
-    let prevEnd = null
+    let prevEnd = this.rootStore.start
     for(let [start, end] of merged){
-      if(prevEnd !== null)
+      if(prevEnd != start)
         gapped.push([true, prevEnd, start])
       gapped.push([false, start, end])
       prevEnd = end
     }
+    if(prevEnd != this.rootStore.end)
+      gapped.push([true, prevEnd, this.rootStore.end])
     return gapped
   }
 }
