@@ -75,9 +75,19 @@ class NavContent extends React.Component {
     const {navStore} = this.props.store
     if(this.canvas){
       x -= this.canvas.getBoundingClientRect().left
-      return Math.round(x / this.canvas.width * (navStore.viewEnd - navStore.viewStart) + navStore.viewStart)
+      return x / this.canvas.width * (navStore.viewEnd - navStore.viewStart) + navStore.viewStart
     }
     return 0
+  }
+
+  @action onWheel(e){
+    const {navStore} = this.props.store
+    const initWidth = navStore.viewEnd - navStore.viewStart
+    let width = initWidth * (e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)
+    width = Math.min(Math.max(width, 1), navStore.end - navStore.start)
+    const addr = this.mouseToAddress(navStore.mouseX)
+    navStore.viewStart = addr - (addr - navStore.viewStart) / initWidth * width
+    navStore.viewEnd = addr + (navStore.viewEnd - addr) / initWidth * width
   }
 
   render(){
@@ -86,13 +96,14 @@ class NavContent extends React.Component {
       .nav-content(
         onMouseMove=${(e) => navStore.mouseX = this.mouseClip(e.screenX)}
         onMouseLeave=${() => navStore.mouseX = null}
+        onWheel=${this.onWheel.bind(this)}
       )
         canvas(
           ref=${(canvas) => {this.canvas = canvas; this.renderCanvas()}}
           width=${navStore.windowWidth - 70} height=30
         )
         .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
-          ${this.mouseToAddress(navStore.mouseX).toString(16).padStart(8, '0').toUpperCase()}
+          ${Math.round(this.mouseToAddress(navStore.mouseX)).toString(16).padStart(8, '0').toUpperCase()}
     `
   }
 }
