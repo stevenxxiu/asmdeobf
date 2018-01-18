@@ -37,12 +37,12 @@ export class Addrs extends React.Component {
   render(){
     const {addrsStore} = this.props.store
     return pug`
-      .addrs.dialog
+      .addrs.panel
         .heading Addresses
         .body
-          Infinite(containerHeight=${addrsStore.windowHeight - 82} elementHeight=22)
-            ${addrsStore.addrs.map(([isGap, start, end]) => pug`
-              .addr(class=${isGap ? 'gap': ''}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 3) + ')'}
+          Infinite(containerHeight=${addrsStore.rootStore.windowHeight - 82} elementHeight=22)
+            ${addrsStore.addrs.map(([isGap, start, end], i) => pug`
+              .text-row(class=${isGap ? 'gap': ''} key=${i}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 3) + ')'}
             `)}
     `
   }
