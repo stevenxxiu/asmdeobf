@@ -11,6 +11,7 @@ export class NavStore {
   @observable viewStart = 0;
   @observable viewEnd = 1;
   @observable windowWidth = 0;
+  @observable mouseX = null;
 
   constructor(rootStore){
     this.rootStore = rootStore
@@ -61,27 +62,50 @@ class NavContent extends React.Component {
     }
   }
 
+  mouseClip(x){
+    if(this.canvas){
+      const rect = this.canvas.getBoundingClientRect()
+      return Math.min(Math.max(x, rect.left), rect.right)
+    }
+    return 0
+  }
+
+  mouseToAddress(x){
+    const {navStore} = this.props.store
+    if(this.canvas){
+      x -= this.canvas.getBoundingClientRect().left
+      return Math.round(x / this.canvas.width * (navStore.viewEnd - navStore.viewStart) + navStore.viewStart)
+    }
+    return 0
+  }
+
   render(){
     const {navStore} = this.props.store
-    return pug`canvas(
-      ref=${(canvas) => {this.canvas = canvas; this.renderCanvas()}}
-      width=${navStore.windowWidth - 50} height=30
-    )`
+    return pug`
+      .nav-content(
+        onMouseMove=${(e) => navStore.mouseX = this.mouseClip(e.screenX)}
+        onMouseLeave=${() => navStore.mouseX = null}
+      )
+        canvas(
+          ref=${(canvas) => {this.canvas = canvas; this.renderCanvas()}}
+          width=${navStore.windowWidth - 70} height=30
+        )
+        .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
+          ${this.mouseToAddress(navStore.mouseX).toString(16).padStart(8, '0').toUpperCase()}
+    `
   }
 }
 
 @inject('store') @observer
 export class NavBar extends React.Component {
   render(){
-    // XXX include a tooltip when hovering to show location
     // XXX include zoom (with panning left right, and indicators on left/right)
     const {navStore} = this.props.store
     return pug`
       .nav-bar
         .nav-ind
           i.fa.fa-chevron-left(class=${navStore.viewStart == navStore.start ? 'inactive' : ''})
-        .nav-content
-          NavContent
+        NavContent
         .nav-ind
           i.fa.fa-chevron-right(class=${navStore.viewEnd == navStore.end ? 'inactive' : ''})
     `
