@@ -3,6 +3,7 @@ import xhr from 'tiny-xhr'
 import {observable, action} from 'mobx'
 import {NavBar, NavStore} from './navbar'
 import {FuncsStore, Funcs} from './funcs'
+import {CFG} from './cfg'
 import {AddrsStore, Addrs} from './addrs'
 
 export class AppStore {
@@ -41,7 +42,7 @@ export class App extends React.Component {
         NavBar
         .bottom-container
           Funcs
-          .cfg
+          CFG
           Addrs
     `
   }

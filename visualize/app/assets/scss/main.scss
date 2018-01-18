@@ -76,6 +76,17 @@ body
 
 .cfg
   flex: 1
+  margin: 0 10px
+  border: 1px solid #999
+  background: linear-gradient(0deg, #dff, #fff)
+  svg
+    .node rect
+      stroke: #333
+      fill: #fff
+    .edgePath path
+      stroke: #333
+      fill: #333
+      stroke-width: 1.5px
 
 .addrs
   width: 200px

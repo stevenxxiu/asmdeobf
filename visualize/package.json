@@ -2,6 +2,7 @@
   "name": "deob-visualize",
   "version": "1.0.0",
   "dependencies": {
+    "d3": "^4.12.2",
     "dagre-d3": "^0.6.0",
     "merge-ranges": "^1.0.2",
     "mobx": "^3.4.1",
