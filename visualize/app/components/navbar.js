@@ -4,14 +4,14 @@ import {inject, observer} from 'mobx-react'
 import {computed, observable, autorun, action} from 'mobx'
 
 export class NavStore {
-  @observable funcs = {};
   @observable start = 0;
   @observable end = 1;
   @observable curStart = 0;
   @observable curEnd = 1;
   @observable windowWidth = 0;
 
-  constructor(){
+  constructor(rootStore){
+    this.rootStore = rootStore
     this.windowWidth = window.innerWidth
     window.addEventListener('resize', () => this.windowWidth = window.innerWidth)
   }
@@ -19,8 +19,8 @@ export class NavStore {
   @computed get ranges(){
     const ranges = []
     const step = (this.curEnd - this.curStart) / (this.windowWidth * 2)
-    for(let addr in this.funcs)
-      for(let block of this.funcs[addr].block)
+    for(let addr in this.rootStore.funcs)
+      for(let block of this.rootStore.funcs[addr].block)
         for(let [addr, size] of block.addr_sizes){
           const start = addr
           const end = addr + size - 1
@@ -33,7 +33,6 @@ export class NavStore {
   @action loadJson(obj){
     this.curStart = this.start = obj.start
     this.curEnd = this.end = obj.end
-    this.funcs = obj.funcs
   }
 }
 
