@@ -52,9 +52,9 @@ class NavContent extends React.Component {
     const ranges = navStore.ranges
     if(this.canvas){
       const ctx = this.canvas.getContext('2d')
-      ctx.fillStyle = '#c0c0c0'
+      ctx.fillStyle = '#bbb'
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
-      ctx.fillStyle = '#0000f0'
+      ctx.fillStyle = '#00e'
       const viewTrans = navStore.viewStart
       const viewScale = this.canvas.width / (navStore.viewEnd - navStore.viewStart)
       for(let [curStart, curEnd] of ranges)
