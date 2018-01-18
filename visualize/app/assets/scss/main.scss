@@ -1,13 +1,20 @@
 
+html, body
+  height: 100%
+
 body
   background-color: #f0f0f0
+  margin: 0
 
 .nav-bar
   display: flex
-  width: 100%
+  width: calc(100% - 10px)
+  padding: 5px
   .nav-ind
     width: 100%
     text-align: center
-    line-height: 50px
+    line-height: 30px
     .inactive
       color: #c0c0c0
+  .nav-content
+    height: 30px
