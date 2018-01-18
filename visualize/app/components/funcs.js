@@ -10,10 +10,8 @@ export class FuncsStore {
   }
 
   @computed get funcs(){
-    const res = []
-    for(let addr in this.rootStore.funcs)
-      res.push(addr)
-    return res
+    const res = this.rootStore.funcs ? Object.keys(this.rootStore.funcs) : []
+    return res.map(parseInt).sort()
   }
 }
 
