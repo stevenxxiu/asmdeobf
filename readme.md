@@ -45,3 +45,6 @@ For self-modifying conditions, we will provide an api to let the user hook addre
 
 # Other tools
 Radeco only works on linux and is not aimed particularly at de-obfuscation. For convenience of python we code own ssa form/simplification routines.
+
+# Visualization
+- Comparison with IDA: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.112.3748&rep=rep1&type=pdf
