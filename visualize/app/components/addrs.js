@@ -42,7 +42,7 @@ export class Addrs extends React.Component {
         .body
           Infinite(containerHeight=${addrsStore.rootStore.windowHeight - 82} elementHeight=22)
             ${addrsStore.addrs.map(([isGap, start, end], i) => pug`
-              .text-row(class=${isGap ? 'gap': ''} key=${i}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 3) + ')'}
+              .text-row(class=${isGap ? 'gap': ''} key=${i}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 0) + ')'}
             `)}
     `
   }
