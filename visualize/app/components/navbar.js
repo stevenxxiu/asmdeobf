@@ -3,7 +3,8 @@ import mergeRanges from 'merge-ranges'
 import {inject, observer} from 'mobx-react'
 import {computed, observable, autorun, action} from 'mobx'
 
-const RESOLUTION = 0.5  // how much merge overlap we allow, to optimize canvas operations
+const RESOLUTION = 0.5  // how much merge overlap we allow, to draw fewer canvas rectangles
+const ZOOM_FACTOR = 1.1
 
 export class NavStore {
   @observable start = 0;
