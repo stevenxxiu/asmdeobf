@@ -6,7 +6,7 @@ import {FuncsStore, Funcs} from './funcs'
 import {AddrsStore, Addrs} from './addrs'
 
 export class AppStore {
-  @observable funcs = null;
+  @observable funcs = {};
   @observable windowWidth = window.innerWidth;
   @observable windowHeight = window.innerHeight;
 
