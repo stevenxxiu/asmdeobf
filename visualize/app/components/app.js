@@ -29,7 +29,7 @@ export class AppStore {
     this.funcs = response.funcs
     this.start = response.start
     this.end = response.end
-    this.navStore.loadJson(response)
+    this.navStore.loadJSON(response)
   }
 }
 

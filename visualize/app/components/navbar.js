@@ -32,7 +32,7 @@ export class NavStore {
     return mergeRanges(ranges)
   }
 
-  @action loadJson(obj){
+  @action loadJSON(obj){
     this.viewStart = this.start = obj.start
     this.viewEnd = this.end = obj.end
   }
