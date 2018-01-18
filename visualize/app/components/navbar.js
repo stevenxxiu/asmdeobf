@@ -86,15 +86,15 @@ class NavContent extends React.Component {
     let width = initWidth * (e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)
     width = Math.min(Math.max(width, 1), navStore.end - navStore.start)
     const addr = this.mouseToAddress(navStore.mouseX)
-    navStore.viewStart = addr - (addr - navStore.viewStart) / initWidth * width
-    navStore.viewEnd = addr + (navStore.viewEnd - addr) / initWidth * width
+    navStore.viewStart = Math.round(addr - (addr - navStore.viewStart) / initWidth * width)
+    navStore.viewEnd = Math.round(addr + (navStore.viewEnd - addr) / initWidth * width)
   }
 
   render(){
     const {navStore} = this.props.store
     return pug`
       .nav-content(
-        onMouseMove=${(e) => navStore.mouseX = this.mouseClip(e.screenX)}
+        onMouseMove=${(e) => navStore.mouseX = this.mouseClip(e.pageX)}
         onMouseLeave=${() => navStore.mouseX = null}
         onWheel=${this.onWheel.bind(this)}
       )
