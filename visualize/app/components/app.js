@@ -7,6 +7,7 @@ import {AddrsStore, Addrs} from './addrs'
 
 export class AppStore {
   @observable funcs = {};
+  @observable selectedFunc = null;
   @observable start = 0;
   @observable end = 1;
   @observable windowWidth = window.innerWidth;

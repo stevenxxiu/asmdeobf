@@ -1,29 +1,50 @@
 import React from 'react'
 import Infinite from 'react-infinite'
 import {inject, observer} from 'mobx-react'
-import {computed} from 'mobx'
+import {computed, action, observable} from 'mobx'
 import {stringifyAddr} from '../utils'
 
 export class FuncsStore {
+  @observable focused = false;
+
   constructor(rootStore){
     this.rootStore = rootStore
   }
 
   @computed get funcs(){
-    return Object.keys(this.rootStore.funcs).map(parseInt).sort()
+    const res = [null]
+    res.push(...Object.keys(this.rootStore.funcs).map(parseInt).sort())
+    return res
   }
 }
 
 @inject('store') @observer
 export class Funcs extends React.Component {
+  @action selectFunc(addr){
+    this.props.store.selectedFunc = addr
+  }
+
+  @action onClick(){
+    this.props.store.funcsStore.focused = true
+  }
+
+  @action onBlur(){
+    this.props.store.funcsStore.focused = false
+  }
+
   render(){
-    const {funcsStore} = this.props.store
+    const {store} = this.props
+    const {funcsStore} = store
     return pug`
-      .funcs.panel
+      .funcs.panel(tabIndex=-1 class=${funcsStore.focused ? 'active': ''} onClick=${this.onClick.bind(this)} onBlur=${this.onBlur.bind(this)})
         .heading Functions
         .body
           Infinite(containerHeight=${funcsStore.rootStore.windowHeight - 82} elementHeight=22)
-            ${funcsStore.funcs.map((addr, i) => pug`.text-row(key=${i}) ${stringifyAddr(addr)}`)}
+            ${funcsStore.funcs.map((addr, i) =>
+              pug`.text-row(
+                key=${i} class=${addr == store.selectedFunc ? 'active': ''} onClick=${() => this.selectFunc(addr)}
+              ) ${addr ? stringifyAddr(addr) : '-'}`
+            )}
     `
   }
 }
