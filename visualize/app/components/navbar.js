@@ -13,11 +13,13 @@ export class NavStore {
   @observable viewEnd = 1;
   @observable windowWidth = 0;
   @observable mouseX = null;
+  @observable dragging = false;
 
   constructor(rootStore){
     this.rootStore = rootStore
     this.windowWidth = window.innerWidth
     window.addEventListener('resize', () => this.windowWidth = window.innerWidth)
+    window.addEventListener('mouseup', () => this.dragging = false)
   }
 
   @computed get ranges(){
@@ -71,7 +73,7 @@ class NavContent extends React.Component {
     return 0
   }
 
-  mouseToAddress(x){
+  mouseToAddr(x){
     const {navStore} = this.props.store
     if(this.canvas){
       x -= this.canvas.getBoundingClientRect().left
@@ -80,22 +82,35 @@ class NavContent extends React.Component {
     return 0
   }
 
+  @action onMouseMove(e){
+    const {navStore} = this.props.store
+    const prevMouseX = navStore.mouseX
+    navStore.mouseX = this.mouseClip(e.pageX)
+    if(navStore.dragging){
+      let d = this.mouseToAddr(navStore.mouseX) - this.mouseToAddr(prevMouseX)
+      d = Math.min(d, navStore.viewStart - navStore.start)
+      d = Math.max(d, navStore.viewEnd - navStore.end)
+      navStore.viewStart -= d
+      navStore.viewEnd -= d
+    }
+  }
+
   @action onWheel(e){
     const {navStore} = this.props.store
     const initWidth = navStore.viewEnd - navStore.viewStart
     let width = initWidth * (e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)
-    width = Math.min(Math.max(width, 1), navStore.end - navStore.start)
-    const addr = this.mouseToAddress(navStore.mouseX)
-    navStore.viewStart = Math.round(addr - (addr - navStore.viewStart) / initWidth * width)
-    navStore.viewEnd = Math.round(addr + (navStore.viewEnd - addr) / initWidth * width)
+    const addr = this.mouseToAddr(navStore.mouseX)
+    navStore.viewStart = Math.max(addr - (addr - navStore.viewStart) / initWidth * width, navStore.start)
+    navStore.viewEnd = Math.min(addr + (navStore.viewEnd - addr) / initWidth * width, navStore.end)
   }
 
   render(){
     const {navStore} = this.props.store
     return pug`
       .nav-content(
-        onMouseMove=${(e) => navStore.mouseX = this.mouseClip(e.pageX)}
+        onMouseMove=${this.onMouseMove.bind(this)}
         onMouseLeave=${() => navStore.mouseX = null}
+        onMouseDown=${() => navStore.dragging = true}
         onWheel=${this.onWheel.bind(this)}
       )
         canvas(
@@ -103,7 +118,7 @@ class NavContent extends React.Component {
           width=${navStore.windowWidth - 70} height=30
         )
         .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
-          ${Math.round(this.mouseToAddress(navStore.mouseX)).toString(16).padStart(8, '0').toUpperCase()}
+          ${Math.round(this.mouseToAddr(navStore.mouseX)).toString(16).padStart(8, '0').toUpperCase()}
     `
   }
 }
@@ -111,7 +126,6 @@ class NavContent extends React.Component {
 @inject('store') @observer
 export class NavBar extends React.Component {
   render(){
-    // XXX include zoom (with panning left right, and indicators on left/right)
     const {navStore} = this.props.store
     return pug`
       .nav-bar
