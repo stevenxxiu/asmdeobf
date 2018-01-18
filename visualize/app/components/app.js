@@ -2,13 +2,14 @@ import React from 'react'
 import xhr from 'tiny-xhr'
 import {observable} from 'mobx'
 import {NavBar, NavStore} from './navbar'
+import {AddrsStore, Addrs} from './addrs'
 
 export class AppStore {
   @observable funcs = null;
-  @observable selectedBlock = null;
 
   constructor(){
     this.navStore = new NavStore(this)
+    this.addrsStore = new AddrsStore(this)
   }
 
   async load(url){
@@ -23,8 +24,12 @@ export class AppStore {
 export class App extends React.Component {
   render(){
     return pug`
-      div
+      .container
         NavBar
+        .bottom-container
+          .funcs
+          .cfg
+          Addrs
     `
   }
 }

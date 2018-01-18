@@ -2,6 +2,7 @@ import React from 'react'
 import mergeRanges from 'merge-ranges'
 import {inject, observer} from 'mobx-react'
 import {computed, observable, autorun, action} from 'mobx'
+import {stringifyAddr} from '../utils'
 
 const RESOLUTION = 0.5  // how much merge overlap we allow, to draw fewer canvas rectangles
 const ZOOM_FACTOR = 1.1
@@ -118,7 +119,7 @@ class NavContent extends React.Component {
           width=${navStore.windowWidth - 70} height=30
         )
         .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
-          ${Math.round(this.mouseToAddr(navStore.mouseX)).toString(16).padStart(8, '0').toUpperCase()}
+          ${stringifyAddr(Math.round(this.mouseToAddr(navStore.mouseX)))}
     `
   }
 }

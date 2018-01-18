@@ -1,15 +1,20 @@
 
-html, body
+html, body, #root, .container
   width, height: 100%
-  overflow-x: hidden
 
 body
   background-color: #eee
   margin: 0
+  overflow-x: hidden
+  font-family: 'Courier New'
+  font-size: 15px
+
+.container
+  display: flex
+  flex-direction: column
 
 .nav-bar
   display: flex
-  width: 100%
   user-select: none
   .nav-ind
     width: 100%
@@ -38,3 +43,35 @@ body
       left: calc(50% - #{$size})
     &.inactive
       visibility: hidden
+
+.bottom-container
+  flex: 1
+  display: flex
+  margin: 0 35px 5px 35px
+
+.dialog
+  display: flex
+  flex-direction: column
+  border: 1px solid #999
+  .heading
+    padding: 3px
+    border-bottom: 1px solid #d5d5d5
+    background: linear-gradient(0deg, #ddd, #fff)
+  .body
+    flex: 1
+    background: #fff
+
+.funcs
+  width: 200px
+
+.cfg
+  flex: 1
+
+.addrs
+  width: 200px
+  .addr
+    padding: 3px
+    height: 16px
+    &.gap
+      color: #777
+      background-color: #eee
