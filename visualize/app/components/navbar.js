@@ -30,9 +30,9 @@ export class NavStore {
       for(let block of this.rootStore.funcs[addr].block)
         for(let [addr, size] of block.addr_sizes){
           const start = addr
-          const end = addr + size - 1
+          const end = addr + size
           if(this.viewStart <= start && end <= this.viewEnd)
-            ranges.push([addr - step, addr + size - 1 + step])
+            ranges.push([addr - step, end + step])
         }
     return mergeRanges(ranges)
   }
@@ -119,7 +119,7 @@ class NavContent extends React.Component {
           width=${navStore.windowWidth - 70} height=30
         )
         .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
-          ${stringifyAddr(Math.round(this.mouseToAddr(navStore.mouseX)))}
+          ${stringifyAddr(Math.floor(this.mouseToAddr(navStore.mouseX)))}
     `
   }
 }

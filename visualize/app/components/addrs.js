@@ -18,14 +18,14 @@ export class AddrsStore {
     for(let addr in this.rootStore.funcs)
       for(let block of this.rootStore.funcs[addr].block)
         for(let [addr, size] of block.addr_sizes)
-          ranges.push([addr, addr + size + 1])
+          ranges.push([addr, addr + size])
     const merged = mergeRanges(ranges)
     const gapped = []
     let prevEnd = null
     for(let [start, end] of merged){
       if(prevEnd !== null)
-        gapped.push([true, prevEnd, start - 1])
-      gapped.push([false, start, end - 1])
+        gapped.push([true, prevEnd, start])
+      gapped.push([false, start, end])
       prevEnd = end
     }
     return gapped
@@ -42,7 +42,7 @@ export class Addrs extends React.Component {
         .body
           Infinite(containerHeight=${addrsStore.windowHeight - 82} elementHeight=22)
             ${addrsStore.addrs.map(([isGap, start, end]) => pug`
-              .addr(class=${isGap ? 'gap': ''}) ${stringifyAddr(start) + ' + ' + stringifyAddr(end - start, 3)}
+              .addr(class=${isGap ? 'gap': ''}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 3) + ')'}
             `)}
     `
   }
