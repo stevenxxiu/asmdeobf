@@ -12,15 +12,15 @@ export class NavStore {
   @observable viewEnd = 1;
   @observable mouseX = null;
   @observable dragging = false;
+  @observable windowWidth = window.innerWidth;
 
   constructor(rootStore){
     this.rootStore = rootStore
-    window.addEventListener('mouseup', () => this.dragging = false)
   }
 
   @computed get ranges(){
     const ranges = []
-    const step = (this.viewEnd - this.viewStart) / this.rootStore.windowWidth * RESOLUTION
+    const step = (this.viewEnd - this.viewStart) / this.windowWidth * RESOLUTION
     for(let addr in this.rootStore.funcs)
       for(let block of this.rootStore.funcs[addr].block)
         for(let [addr, size] of block.addr_sizes){
@@ -43,6 +43,9 @@ class NavContent extends React.Component {
   constructor(props){
     super(props)
     this.canvas = null
+    const {navStore} = this.props.store
+    window.addEventListener('resize', () => navStore.windowWidth = window.innerWidth)
+    window.addEventListener('mouseup', () => navStore.dragging = false)
     autorun(this.renderCanvas.bind(this))
   }
 
@@ -111,7 +114,7 @@ class NavContent extends React.Component {
       )
         canvas(
           ref=${(canvas) => {this.canvas = canvas; this.renderCanvas()}}
-          width=${navStore.rootStore.windowWidth - 70} height=30
+          width=${navStore.windowWidth - 70} height=30
         )
         .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
           ${stringifyAddr(Math.floor(this.mouseToAddr(navStore.mouseX)))}

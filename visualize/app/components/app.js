@@ -11,17 +11,11 @@ export class AppStore {
   @observable selectedFunc = null;
   @observable start = 0;
   @observable end = 1;
-  @observable windowWidth = window.innerWidth;
-  @observable windowHeight = window.innerHeight;
 
   constructor(){
     this.navStore = new NavStore(this)
     this.addrsStore = new AddrsStore(this)
     this.funcsStore = new FuncsStore(this)
-    window.addEventListener('resize', () => {
-      this.windowWidth = window.innerWidth
-      this.windowHeight = window.innerHeight
-    })
   }
 
   @action async load(url){

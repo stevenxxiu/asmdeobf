@@ -2,15 +2,14 @@ import React from 'react'
 import mergeRanges from 'merge-ranges'
 import Infinite from 'react-infinite'
 import {inject, observer} from 'mobx-react'
-import {computed, observable} from 'mobx'
+import {action, computed, observable} from 'mobx'
 import {stringifyAddr} from '../utils'
 
 export class AddrsStore {
-  @observable windowHeight = window.innerHeight;
+  @observable containerHeight = 1;
 
   constructor(rootStore){
     this.rootStore = rootStore
-    window.addEventListener('resize', () => this.windowHeight = window.innerHeight)
   }
 
   @computed get addrs(){
@@ -38,13 +37,25 @@ export class AddrsStore {
 
 @inject('store') @observer
 export class Addrs extends React.Component {
+  constructor(props){
+    super(props)
+    this.body = null
+    window.addEventListener('resize', this.updateHeight.bind(this))
+  }
+
+  @action updateHeight(){
+    const {addrsStore} = this.props.store
+    if(this.body)
+      addrsStore.containerHeight = this.body.offsetHeight
+  }
+
   render(){
     const {addrsStore} = this.props.store
     return pug`
       .addrs.panel
         .heading Addresses
-        .body
-          Infinite(containerHeight=${addrsStore.rootStore.windowHeight - 82} elementHeight=22)
+        .body(ref=${(body) => {this.body = body; this.updateHeight()}})
+          Infinite(containerHeight=${addrsStore.containerHeight} elementHeight=22)
             ${addrsStore.addrs.map(([isGap, start, end], i) => pug`
               .text-row(class=${isGap ? 'gap': ''} key=${i}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 0) + ')'}
             `)}
