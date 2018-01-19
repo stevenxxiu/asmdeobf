@@ -6,7 +6,7 @@
 # Visualizer
 - Allow clicking blocks to highlight the addresses covered, and also highlight its corresponding list of addresses
 
-- Properly change width & height for panels, using css overflow
+- Refactor width & height to their own components
 
 - cfg display
     - color code edges like ida
