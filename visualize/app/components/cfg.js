@@ -3,6 +3,7 @@ import {inject, observer} from 'mobx-react'
 import {autorun} from 'mobx'
 import * as d3 from 'd3'
 import dagreD3 from 'dagre-d3'
+import {PropWidthHeight} from './propwidthheight'
 
 @inject('store') @observer
 export class CFG extends React.Component {
@@ -55,8 +56,6 @@ export class CFG extends React.Component {
 
       const svg = d3.select('.cfg svg')
       const inner = svg.select('.cfg g')
-      svg.attr('width', this.container.offsetWidth - 2)
-      svg.attr('height', this.container.offsetHeight - 2)
 
       // render
       const render = new dagreD3.render()
@@ -74,8 +73,9 @@ export class CFG extends React.Component {
   render(){
     return pug`
       .cfg(ref=${(e) => {this.container = e; this.renderGraph()}})
-        svg
-          g
+        PropWidthHeight(propWidth='width' propHeight='height')
+          svg
+            g
     `
   }
 }
