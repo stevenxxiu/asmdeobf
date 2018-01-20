@@ -7,6 +7,8 @@ import {PropWidthHeight} from './propwidthheight'
 import {stringifyAddr} from '../utils'
 
 export class AddrsStore {
+  @observable filter = '';
+
   constructor(rootStore){
     this.rootStore = rootStore
   }
@@ -41,12 +43,15 @@ export class Addrs extends React.Component {
     return pug`
       .addrs.panel
         .heading Addresses
+        input(type='text' value=${addrsStore.filter} onChange=${(e) => addrsStore.filter = e.target.value})
         .body
           PropWidthHeight(propHeight='containerHeight')
             Infinite(elementHeight=22)
-              ${addrsStore.addrs.map(([isGap, start, end], i) => pug`
-                .text-row(class=${isGap ? 'gap': ''} key=${i}) ${stringifyAddr(start) + ' (' + stringifyAddr(end - start, 0) + ')'}
-              `)}
+              ${addrsStore.addrs
+                .map(([isGap, start, end]) => [isGap, stringifyAddr(start) + ' (' + stringifyAddr(end - start, 0) + ')'])
+                .filter(([isGap, text]) => text.includes(addrsStore.filter))
+                .map(([isGap, text], i) => pug`.text-row(class=${isGap ? 'gap': ''} key=${i}) ${text}`)
+              }
     `
   }
 }

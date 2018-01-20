@@ -62,6 +62,9 @@ body
     flex: 1
     overflow: hidden
     background: #fff
+    input
+      width: calc(100% - 4px)
+      display: block
 
 .text-row
   padding: 3px
@@ -69,9 +72,9 @@ body
 
 .funcs
   width: 200px
-  .active
+  .text-row.active
     background-color: #eee
-  &.active .active
+  .active .text-row.active
     color: #fff
     background-color: #39f
 

@@ -7,6 +7,7 @@ import {PropWidthHeight} from './propwidthheight'
 
 export class FuncsStore {
   @observable focused = false;
+  @observable filter = '';
 
   constructor(rootStore){
     this.rootStore = rootStore
@@ -19,10 +20,6 @@ export class FuncsStore {
 
 @inject('store') @observer
 export class Funcs extends React.Component {
-  @action selectFunc(addr){
-    this.props.store.selectedFunc = addr
-  }
-
   @action onClick(){
     this.props.store.funcsStore.focused = true
   }
@@ -35,16 +32,22 @@ export class Funcs extends React.Component {
     const {store} = this.props
     const {funcsStore} = store
     return pug`
-      .funcs.panel(tabIndex=-1 class=${funcsStore.focused ? 'active': ''} onClick=${this.onClick.bind(this)} onBlur=${this.onBlur.bind(this)})
+      .funcs.panel
         .heading Functions
-        .body
+        input(type='text' value=${funcsStore.filter} onChange=${(e) => funcsStore.filter = e.target.value})
+        .body(tabIndex=-1 class=${funcsStore.focused ? 'active': ''} onClick=${this.onClick.bind(this)} onBlur=${this.onBlur.bind(this)})
           PropWidthHeight(propHeight='containerHeight')
             Infinite(elementHeight=22)
-              ${funcsStore.funcs.map((addr, i) =>
-                pug`.text-row(
-                  key=${i} class=${addr == store.selectedFunc ? 'active': ''} onClick=${() => this.selectFunc(addr)}
-                ) ${addr ? stringifyAddr(addr) : '-'}`
-              )}
+              ${funcsStore.funcs
+                .map(addr => [addr, addr ? stringifyAddr(addr) : '-'])
+                .filter(([addr, text]) => text.includes(funcsStore.filter))
+                .map(([addr, text], i) =>
+                  pug`.text-row(
+                    key=${i} class=${addr == store.selectedFunc ? 'active': ''}
+                    onClick=${() => this.props.store.selectedFunc = addr}
+                  ) ${text}`
+                )
+              }
     `
   }
 }
