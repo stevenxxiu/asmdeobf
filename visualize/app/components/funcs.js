@@ -13,9 +13,7 @@ export class FuncsStore {
   }
 
   @computed get funcs(){
-    const res = [null]
-    res.push(...Object.keys(this.rootStore.funcs).map(parseInt).sort())
-    return res
+    return [null, ...Object.keys(this.rootStore.funcs).map(parseInt).sort()]
   }
 }
 
