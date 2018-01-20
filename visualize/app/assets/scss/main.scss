@@ -86,9 +86,11 @@ body
   overflow: hidden
   svg
     .node
-      rect
+      > rect
         stroke: #000
         fill: #fff
+      rect.active
+        fill: #ff0
       .label
         fill: #000080
         .size

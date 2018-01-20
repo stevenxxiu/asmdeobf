@@ -64,10 +64,35 @@ export class CFG extends React.Component {
         this.parentNode.classList.add('back')
     })
 
+    // clicking variables highlights them
+    svg.selectAll('.var').on('mousedown', function(){
+      const node = this
+      let parent = node
+      while(parent.nodeName != 'g') parent = parent.parentNode
+      svg.selectAll('rect.active').remove()
+      d3.select(parent).selectAll('.var').each(function(){
+        if(this.textContent == node.textContent){
+          const extent = this.getExtentOfChar(0) // pos + dimensions of the first glyph
+          const width = this.getComputedTextLength() // width of the tspan
+          const rect = document.createElementNS('http://www.w3.org/2000/svg','rect')
+          rect.x.baseVal.value = extent.x
+          rect.y.baseVal.value = extent.y
+          rect.width.baseVal.value = width
+          rect.height.baseVal.value = extent.height
+          rect.classList.add('active')
+          parent.insertBefore(rect, parent.firstChild)
+        }
+      })
+      d3.event.stopPropagation()
+    })
+
     // set up panning
     const zoom = d3.zoom().on('zoom', () => inner.attr('transform', d3.event.transform))
     svg.call(zoom).on('wheel.zoom', null).on('dblclick.zoom', null)
-    svg.selectAll('.node').on('mousedown', () => d3.event.stopPropagation())
+    svg.selectAll('.node').on('mousedown', function(){
+      svg.selectAll('rect.active').remove()
+      d3.event.stopPropagation()
+    })
 
     // horizontally center the graph and apply vertical margin
     svg.call(zoom.transform, d3.zoomIdentity.translate((svg.attr('width') - g.graph().width) / 2, 30))
