@@ -6,8 +6,6 @@
 # Visualizer
 - Allow clicking blocks to highlight the addresses covered, and also highlight its corresponding list of addresses
 
-- Refactor width & height to their own components
-
 - cfg display
     - color code edges like ida
     - double click edges can jmp

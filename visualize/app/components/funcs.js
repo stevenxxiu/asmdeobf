@@ -3,9 +3,9 @@ import Infinite from 'react-infinite'
 import {inject, observer} from 'mobx-react'
 import {computed, action, observable} from 'mobx'
 import {stringifyAddr} from '../utils'
+import {PropWidthHeight} from './propwidthheight'
 
 export class FuncsStore {
-  @observable containerHeight = 1;
   @observable focused = false;
 
   constructor(rootStore){
@@ -21,18 +21,6 @@ export class FuncsStore {
 
 @inject('store') @observer
 export class Funcs extends React.Component {
-  constructor(props){
-    super(props)
-    this.body = null
-    window.addEventListener('resize', this.updateHeight.bind(this))
-  }
-
-  @action updateHeight(){
-    const {funcsStore} = this.props.store
-    if(this.body)
-      funcsStore.containerHeight = this.body.offsetHeight
-  }
-
   @action selectFunc(addr){
     this.props.store.selectedFunc = addr
   }
@@ -51,13 +39,14 @@ export class Funcs extends React.Component {
     return pug`
       .funcs.panel(tabIndex=-1 class=${funcsStore.focused ? 'active': ''} onClick=${this.onClick.bind(this)} onBlur=${this.onBlur.bind(this)})
         .heading Functions
-        .body(ref=${(body) => {this.body = body; this.updateHeight()}})
-          Infinite(containerHeight=${funcsStore.containerHeight} elementHeight=22)
-            ${funcsStore.funcs.map((addr, i) =>
-              pug`.text-row(
-                key=${i} class=${addr == store.selectedFunc ? 'active': ''} onClick=${() => this.selectFunc(addr)}
-              ) ${addr ? stringifyAddr(addr) : '-'}`
-            )}
+        .body
+          PropWidthHeight(propHeight='containerHeight')
+            Infinite(elementHeight=22)
+              ${funcsStore.funcs.map((addr, i) =>
+                pug`.text-row(
+                  key=${i} class=${addr == store.selectedFunc ? 'active': ''} onClick=${() => this.selectFunc(addr)}
+                ) ${addr ? stringifyAddr(addr) : '-'}`
+              )}
     `
   }
 }
