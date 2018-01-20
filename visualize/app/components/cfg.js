@@ -30,14 +30,8 @@ export class CFG extends React.Component {
     const blocks = store.funcs[funcAddr].block
     for(let [id, block] of Object.entries(blocks)){
       const group = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-      for(let [i, line] of block.text.split('\n').entries()){
-        const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan')
-        tspan.setAttribute('dy', `${i + 1}em`)
-        tspan.innerHTML = highlightDeob(line)
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-        text.appendChild(tspan)
-        group.appendChild(text)
-      }
+      for(let [i, line] of block.text.split('\n').entries())
+        d3.select(group).append('text').append('tspan').attr('dy', `${i + 1}em`).html(highlightDeob(line))
       g.setNode(id, {label: group, labelType: 'svg'})
     }
     for(let id of g.nodes()){
@@ -74,13 +68,8 @@ export class CFG extends React.Component {
         if(this.textContent == node.textContent){
           const extent = this.getExtentOfChar(0) // pos + dimensions of the first glyph
           const width = this.getComputedTextLength() // width of the tspan
-          const rect = document.createElementNS('http://www.w3.org/2000/svg','rect')
-          rect.x.baseVal.value = extent.x
-          rect.y.baseVal.value = extent.y
-          rect.width.baseVal.value = width
-          rect.height.baseVal.value = extent.height
-          rect.classList.add('active')
-          parent.insertBefore(rect, parent.firstChild)
+          d3.select(parent).insert('rect', ':first-child').classed('active', true)
+            .attr('x', extent.x).attr('y', extent.y).attr('width', width).attr('height', extent.height)
         }
       })
       d3.event.stopPropagation()
