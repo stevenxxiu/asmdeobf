@@ -82,9 +82,21 @@ body
   background: linear-gradient(0deg, #dff, #fff)
   overflow: hidden
   svg
-    .node rect
-      stroke: #000
-      fill: #fff
+    .node
+      rect
+        stroke: #000
+        fill: #fff
+      .label
+        fill: #000080
+        .size
+          fill: #800000
+        .integer
+          fill: #008000
+        .api
+          fill: #ff00ff
+        .var
+          fill: #0080c0
+
     .edgePath
       stroke-width: 1.5px
       stroke, fill: #00f

@@ -7,6 +7,5 @@
 - Allow clicking blocks to highlight the addresses covered, and also highlight its corresponding list of addresses
 
 - cfg display
-    - syntax highlighting
     - double click edges can jmp
     - minimap

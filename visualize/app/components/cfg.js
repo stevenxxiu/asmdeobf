@@ -4,6 +4,7 @@ import {autorun} from 'mobx'
 import * as d3 from 'd3'
 import dagreD3 from 'dagre-d3'
 import {PropWidthHeight} from './propwidthheight'
+import {highlightDeob} from '../highlight'
 
 @inject('store') @observer
 export class CFG extends React.Component {
@@ -32,7 +33,7 @@ export class CFG extends React.Component {
       for(let [i, line] of block.text.split('\n').entries()){
         const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan')
         tspan.setAttribute('dy', `${i + 1}em`)
-        tspan.textContent = line
+        tspan.innerHTML = highlightDeob(line)
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
         text.appendChild(tspan)
         group.appendChild(text)
