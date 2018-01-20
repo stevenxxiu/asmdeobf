@@ -14,7 +14,7 @@ export class AddrsStore {
   @computed get addrs(){
     const ranges = []
     for(let addr in this.rootStore.funcs)
-      for(let block of this.rootStore.funcs[addr].block)
+      for(let block of Object.values(this.rootStore.funcs[addr].block))
         for(let [addr, size] of block.addr_sizes)
           // check if within [start, end) since api calls can be out of range
           if(this.rootStore.start <= addr && addr + size <= this.rootStore.end)

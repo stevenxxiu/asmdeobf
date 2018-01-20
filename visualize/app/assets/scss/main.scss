@@ -83,12 +83,17 @@ body
   overflow: hidden
   svg
     .node rect
-      stroke: #333
+      stroke: #000
       fill: #fff
     .edgePath path
-      stroke: #333
-      fill: #333
       stroke-width: 1.5px
+      stroke, fill: #00f
+      &.left
+        stroke, fill: #0f0
+      &.right
+        stroke, fill: #f00
+      &.bold
+        stroke-width: 2px
 
 .addrs
   width: 200px

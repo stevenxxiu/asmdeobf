@@ -27,12 +27,11 @@ class FuncEncoder(JSONEncoder):
             return obj.__dict__
         elif isinstance(obj, Block):
             blocks = list(obj.dfs())
-            return [{
-                'id': id(block),
+            return {id(block): {
                 'addr_sizes': sorted(block.addr_sizes),
                 'text': str(block),
                 'children': [id(child) for child in block.children],
-            } for block in blocks]
+            } for block in blocks}
         return super().default(obj)
 
 

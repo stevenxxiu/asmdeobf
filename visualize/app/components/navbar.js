@@ -22,7 +22,7 @@ export class NavStore {
     const ranges = []
     const step = (this.viewEnd - this.viewStart) / this.windowWidth * RESOLUTION
     for(let addr in this.rootStore.funcs)
-      for(let block of this.rootStore.funcs[addr].block)
+      for(let block of Object.values(this.rootStore.funcs[addr].block))
         for(let [addr, size] of block.addr_sizes){
           const start = addr
           const end = addr + size
