@@ -6,9 +6,7 @@
 # Visualizer
 - Allow clicking blocks to highlight the addresses covered, and also highlight its corresponding list of addresses
 
-- make paths pointing back bold
-
 - cfg display
-    - color code edges like ida
+    - syntax highlighting
     - double click edges can jmp
     - minimap

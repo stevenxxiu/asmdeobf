@@ -85,15 +85,19 @@ body
     .node rect
       stroke: #000
       fill: #fff
-    .edgePath path
+    .edgePath
       stroke-width: 1.5px
       stroke, fill: #00f
       &.left
         stroke, fill: #0f0
       &.right
         stroke, fill: #f00
-      &.bold
-        stroke-width: 2px
+      &.back
+        stroke, fill: #00d
+        .left
+          stroke, fill: #0d0
+        .right
+          stroke, fill: #d00
 
 .addrs
   width: 200px

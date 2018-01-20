@@ -57,6 +57,12 @@ export class CFG extends React.Component {
     const render = new dagreD3.render()
     render(inner, g)
 
+    // marks paths pointing back for styles
+    svg.selectAll('.edgePath .path').each(function({v, w}){
+      if(g.node(v).y > g.node(w).y)
+        this.parentNode.classList.add('back')
+    })
+
     // set up panning
     const zoom = d3.zoom().on('zoom', () => inner.attr('transform', d3.event.transform))
     svg.call(zoom).on('wheel.zoom', null).on('dblclick.zoom', null)
