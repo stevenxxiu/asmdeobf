@@ -9,3 +9,6 @@
 - cfg display
     - double click edges can jmp
     - minimap
+
+- add an input dialog to filter functions & addresses
+
