@@ -9,22 +9,18 @@ export class PropWidthHeight extends React.Component {
 
   constructor(props){
     super(props)
-    this.container = null
-    window.addEventListener('resize', this.update.bind(this))
-
+    window.addEventListener('resize', this.componentDidMount.bind(this))
   }
 
-  @action update(){
-    if(this.container){
-      this.width = this.container.offsetWidth
-      this.height = this.container.offsetHeight
-    }
+  @action componentDidMount(){
+    this.width = this.refs.container.offsetWidth
+    this.height = this.refs.container.offsetHeight
   }
 
   render(){
     /* eslint-disable indent */
     return pug`
-      div(ref=${(container) => {this.container = container; this.update()}} style={width: '100%', height: '100%'})
+      div(ref='container' style={width: '100%', height: '100%'})
         ${React.Children.map(this.props.children, child =>
           React.cloneElement(child, {[this.props.propWidth]: this.width, [this.props.propHeight]: this.height})
         )}

@@ -42,31 +42,30 @@ export class NavStore {
 class NavContent extends React.Component {
   constructor(props){
     super(props)
-    this.canvas = null
     const {navStore} = this.props.store
     window.addEventListener('resize', () => navStore.windowWidth = window.innerWidth)
     window.addEventListener('mouseup', () => navStore.dragging = false)
-    autorun(this.renderCanvas.bind(this))
+    autorun(this.componentDidUpdate.bind(this))
   }
 
-  renderCanvas(){
+  componentDidUpdate(){
     const {navStore} = this.props.store
     const ranges = navStore.ranges
-    if(this.canvas){
-      const ctx = this.canvas.getContext('2d')
+    if(this.refs.canvas){
+      const ctx = this.refs.canvas.getContext('2d')
       ctx.fillStyle = '#bbb'
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+      ctx.fillRect(0, 0, this.refs.canvas.width, this.refs.canvas.height)
       ctx.fillStyle = '#00e'
       const viewTrans = navStore.viewStart
-      const viewScale = this.canvas.width / (navStore.viewEnd - navStore.viewStart)
+      const viewScale = this.refs.canvas.width / (navStore.viewEnd - navStore.viewStart)
       for(let [curStart, curEnd] of ranges)
-        ctx.fillRect((curStart - viewTrans) * viewScale, 0, (curEnd - curStart) * viewScale, this.canvas.height)
+        ctx.fillRect((curStart - viewTrans) * viewScale, 0, (curEnd - curStart) * viewScale, this.refs.canvas.height)
     }
   }
 
   mouseClip(x){
-    if(this.canvas){
-      const rect = this.canvas.getBoundingClientRect()
+    if(this.refs.canvas){
+      const rect = this.refs.canvas.getBoundingClientRect()
       return Math.min(Math.max(x, rect.left), rect.right)
     }
     return 0
@@ -74,9 +73,9 @@ class NavContent extends React.Component {
 
   mouseToAddr(x){
     const {navStore} = this.props.store
-    if(this.canvas){
-      x -= this.canvas.getBoundingClientRect().left
-      return x / this.canvas.width * (navStore.viewEnd - navStore.viewStart) + navStore.viewStart
+    if(this.refs.canvas){
+      x -= this.refs.canvas.getBoundingClientRect().left
+      return x / this.refs.canvas.width * (navStore.viewEnd - navStore.viewStart) + navStore.viewStart
     }
     return 0
   }
@@ -112,10 +111,7 @@ class NavContent extends React.Component {
         onMouseDown=${() => navStore.dragging = true}
         onWheel=${this.onWheel.bind(this)}
       )
-        canvas(
-          ref=${(canvas) => {this.canvas = canvas; this.renderCanvas()}}
-          width=${navStore.windowWidth - 70} height=30
-        )
+        canvas(ref='canvas' width=${navStore.windowWidth - 70} height=30)
         .tooltip(class=${navStore.mouseX == null ? 'inactive' : ''} style=${{left: navStore.mouseX}})
           ${stringifyAddr(Math.floor(this.mouseToAddr(navStore.mouseX)))}
     `
