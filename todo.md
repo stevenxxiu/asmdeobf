@@ -8,4 +8,5 @@
 
 - cfg display
     - double click edges can jmp
+    - click on a variable highlight all of them
     - minimap
