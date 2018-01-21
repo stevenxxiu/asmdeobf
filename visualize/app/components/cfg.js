@@ -3,7 +3,6 @@ import {inject, observer} from 'mobx-react'
 import {autorun} from 'mobx'
 import * as d3 from 'd3'
 import dagreD3 from 'dagre-d3'
-import {PropWidthHeight} from './propwidthheight'
 import {highlightDeob} from '../highlight'
 
 @inject('store') @observer
@@ -11,17 +10,17 @@ export class CFG extends React.Component {
   constructor(props){
     super(props)
     autorun(this.componentDidMount.bind(this))
+    window.addEventListener('resize', this.renderMinimap.bind(this))
   }
 
-  componentDidMount(){
+  renderGraph(){
     const {store} = this.props
     const funcAddr = store.selectedFunc
-    const svg = d3.select('.cfg svg')
-    const inner = svg.select('g')
+    const svg = d3.select('.cfg .graph')
 
     // empty graph
     if(funcAddr == null){
-      inner.select('*').remove()
+      svg.select('*').remove()
       return
     }
 
@@ -50,13 +49,12 @@ export class CFG extends React.Component {
 
     // render
     const render = new dagreD3.render()
-    render(inner, g)
+    render(svg, g)
 
     // marks paths pointing back for styles
-    svg.selectAll('.edgePath .path').each(function({v, w}){
-      if(g.node(v).y > g.node(w).y)
-        this.parentNode.classList.add('back')
-    })
+    for(let {v, w} of g.edges())
+      if(g.node(v).y < g.node(w).y)
+        g.edge({v, w}).elem.classList.add('back')
 
     // clicking variables highlights them
     svg.selectAll('.var').on('mousedown', function(){
@@ -76,7 +74,7 @@ export class CFG extends React.Component {
     })
 
     // set up panning
-    const zoom = d3.zoom().on('zoom', () => inner.attr('transform', d3.event.transform))
+    const zoom = d3.zoom().on('zoom', () => svg.select('.output').attr('transform', d3.event.transform))
     svg.call(zoom).on('wheel.zoom', null).on('dblclick.zoom', null)
     svg.selectAll('.node').on('mousedown', function(){
       svg.selectAll('rect.active').remove()
@@ -84,15 +82,44 @@ export class CFG extends React.Component {
     })
 
     // horizontally center the graph and apply vertical margin
-    svg.call(zoom.transform, d3.zoomIdentity.translate((svg.attr('width') - g.graph().width) / 2, 30))
+    const contBBox = svg.node().getBoundingClientRect()
+    svg.call(zoom.transform, d3.zoomIdentity.translate((contBBox.width - g.graph().width) / 2, 30))
+  }
+
+  renderMinimap(){
+    const svg = d3.select('.cfg .minimap')
+    svg.select('.output').remove()
+    const graph = d3.select('.cfg .graph .output').node()
+    if(!graph)
+      return
+    const cloned = d3.select(graph.cloneNode(true))
+    cloned.selectAll('text').remove()
+    cloned.selectAll('.path').each(function(){this.removeAttribute('marker-end')})
+    cloned.selectAll('rect, .path').each(function(){this.setAttribute('vector-effect', 'non-scaling-stroke')})
+    svg.insert(() => cloned.node(), '.view-finder')
+    const graphBBox = cloned.node().getBBox()
+    const contBBox = svg.node().getBoundingClientRect()
+    const scale = Math.max(graphBBox.width / contBBox.width, graphBBox.height / contBBox.height) * 1.1
+    svg.attr('viewBox', `0 0 ${scale * contBBox.width} ${scale * contBBox.height}`)
+    cloned.attr('transform', `translate(
+      ${(scale * contBBox.width - graphBBox.width) / 2},
+      ${(scale * contBBox.height - graphBBox.height) / 2}
+    )`)
+
+  }
+
+  componentDidMount(){
+    this.renderGraph()
+    this.renderMinimap()
   }
 
   render(){
     return pug`
       .cfg(ref='container')
-        PropWidthHeight(propWidth='width' propHeight='height')
-          svg(shapeRendering='crispEdges')
-            g
+        svg.graph(shapeRendering='crispEdges')
+        svg.minimap(shapeRendering='crispEdges')
+          rect.background(width='100%' height='100%')
+          rect.view-finder(width='40%' height='40%' vectorEffect='non-scaling-stroke')
     `
   }
 }

@@ -79,6 +79,7 @@ body
     background-color: #39f
 
 .cfg
+  position: relative
   flex: 1
   margin: 0 10px
   border: 1px solid #999
@@ -101,7 +102,6 @@ body
           fill: #ff00ff
         .var
           fill: #0080c0
-
     .edgePath
       stroke-width: 1.5px
       stroke, fill: #00f
@@ -115,6 +115,23 @@ body
           stroke, fill: #0d0
         .right
           stroke, fill: #d00
+  .graph
+    width, height: 100%
+  .minimap
+    position: absolute
+    left, bottom: 5px
+    width, height: 15%
+    .node > rect
+      stroke-width: 1px
+    .edgePath
+      stroke-width: 2px
+    .background
+      fill: #ddd
+      fill-opacity: 0.5
+    .view-finder
+      fill: none
+      stroke: #000
+      stroke-dasharray: 2px
 
 .addrs
   width: 200px
