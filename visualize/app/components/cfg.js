@@ -1,16 +1,21 @@
 import React from 'react'
 import {inject, observer} from 'mobx-react'
-import {autorun} from 'mobx'
+import {action, observable, autorun} from 'mobx'
 import * as d3 from 'd3'
 import dagreD3 from 'dagre-d3'
 import {highlightDeob} from '../highlight'
+
+export class CFGStore {
+  @observable viewX = 0;
+  @observable viewY = 0;
+}
 
 @inject('store') @observer
 export class CFG extends React.Component {
   constructor(props){
     super(props)
     autorun(this.componentDidMount.bind(this))
-    window.addEventListener('resize', this.renderMinimap.bind(this))
+    window.addEventListener('resize', this.componentDidMount.bind(this))
   }
 
   renderGraph(){
@@ -88,24 +93,38 @@ export class CFG extends React.Component {
 
   renderMinimap(){
     const svg = d3.select('.cfg .minimap')
+
+    // clear existing output
     svg.select('.output').remove()
-    const graph = d3.select('.cfg .graph .output').node()
-    if(!graph)
-      return
-    const cloned = d3.select(graph.cloneNode(true))
+
+    // center finder's coordinates
+    const finder = svg.select('.view-finder')
+    if(!finder.node()) return
+    const finderBBox = finder.node().getBBox()
+    finder.attr('transform', `translate(${-finderBBox.width / 2}, ${-finderBBox.height / 2})`)
+
+    // draw mini-cfg
+    const graph = d3.select('.cfg .graph .output')
+    if(!graph.node()) return
+    const cloned = d3.select(graph.node().cloneNode(true))
     cloned.selectAll('text').remove()
     cloned.selectAll('.path').each(function(){this.removeAttribute('marker-end')})
     cloned.selectAll('rect, .path').each(function(){this.setAttribute('vector-effect', 'non-scaling-stroke')})
-    svg.insert(() => cloned.node(), '.view-finder')
+    svg.insert(() => cloned.node(), '.view-loc')
+
+    // update coordinate system so mini-cfg's matches cfg's
     const graphBBox = cloned.node().getBBox()
     const contBBox = svg.node().getBoundingClientRect()
     const scale = Math.max(graphBBox.width / contBBox.width, graphBBox.height / contBBox.height) * 1.1
-    svg.attr('viewBox', `0 0 ${scale * contBBox.width} ${scale * contBBox.height}`)
-    cloned.attr('transform', `translate(
-      ${(scale * contBBox.width - graphBBox.width) / 2},
-      ${(scale * contBBox.height - graphBBox.height) / 2}
-    )`)
+    let [x, y] = /translate\(([^,]+),([^,]+)\)/.exec(cloned.attr('transform')).slice(1).map(parseFloat)
+    x -= (scale * contBBox.width - graphBBox.width) / 2
+    y -= (scale * contBBox.height - graphBBox.height) / 2
+    const width = scale * contBBox.width
+    const height = scale * contBBox.height
+    svg.attr('viewBox', `${x} ${y} ${width} ${height}`)
 
+    // update background so it fills up the svg
+    d3.select('.background').attr('x', x).attr('y', y)
   }
 
   componentDidMount(){
@@ -114,12 +133,14 @@ export class CFG extends React.Component {
   }
 
   render(){
+    const {cfgStore} = this.props.store
     return pug`
       .cfg(ref='container')
         svg.graph(shapeRendering='crispEdges')
         svg.minimap(shapeRendering='crispEdges')
-          rect.background(width='100%' height='100%')
-          rect.view-finder(width='40%' height='40%' vectorEffect='non-scaling-stroke')
+          rect.background(width='100%', height='100%')
+          g.view-loc(transform=${`translate(${cfgStore.viewX}, ${cfgStore.viewY})`})
+            rect.view-finder(width='40%' height='40%' vectorEffect='non-scaling-stroke')
     `
   }
 }

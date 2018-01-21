@@ -3,7 +3,7 @@ import xhr from 'tiny-xhr'
 import {observable, action} from 'mobx'
 import {NavBar, NavStore} from './navbar'
 import {FuncsStore, Funcs} from './funcs'
-import {CFG} from './cfg'
+import {CFGStore, CFG} from './cfg'
 import {AddrsStore, Addrs} from './addrs'
 
 export class AppStore {
@@ -16,6 +16,7 @@ export class AppStore {
     this.navStore = new NavStore(this)
     this.addrsStore = new AddrsStore(this)
     this.funcsStore = new FuncsStore(this)
+    this.cfgStore = new CFGStore(this)
   }
 
   @action async load(url){
