@@ -13,8 +13,10 @@ export class PropWidthHeight extends React.Component {
   }
 
   @action componentDidMount(){
-    this.width = this.refs.container.offsetWidth
-    this.height = this.refs.container.offsetHeight
+    if(this.refs.container){
+      this.width = this.refs.container.offsetWidth
+      this.height = this.refs.container.offsetHeight
+    }
   }
 
   render(){
