@@ -5,6 +5,4 @@
 
 # Visualizer
 - Allow clicking blocks to highlight the addresses covered, and also highlight its corresponding list of addresses
-
-- cfg display
-    - double click edges can jmp
+- cfg display double click edges can jmp
