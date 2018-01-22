@@ -8,10 +8,10 @@ const RESOLUTION = 0.5  // how much merge overlap we allow, to draw fewer canvas
 const ZOOM_FACTOR = 1.1
 
 export class NavStore {
+  dragging = false;
   @observable viewStart = 0;
   @observable viewEnd = 1;
   @observable mouseX = null;
-  @observable dragging = false;
   @observable windowWidth = window.innerWidth;
 
   constructor(rootStore){
