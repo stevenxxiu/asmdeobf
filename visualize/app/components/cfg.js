@@ -6,8 +6,15 @@ import dagreD3 from 'dagre-d3'
 import {highlightDeob} from '../highlight'
 
 export class CFGStore {
-  @observable viewX = 0;
-  @observable viewY = 0;
+  // graph's top left is at (0, 0), everything else is a viewbox
+  @observable vX = 0;
+  @observable vY = 0;
+  @observable vWidth = 0;
+  @observable vHeight = 0;
+  @observable mX = 0;
+  @observable mY = 0;
+  @observable mWidth = 0;
+  @observable mHeight = 0;
 }
 
 @inject('store') @observer
@@ -15,13 +22,35 @@ export class CFG extends React.Component {
   constructor(props){
     super(props)
     autorun(this.componentDidMount.bind(this))
-    window.addEventListener('resize', this.componentDidMount.bind(this))
+    window.addEventListener('resize', this.onResize.bind(this))
+  }
+
+  @action onResize(resize=true){
+    const {cfgStore} = this.props.store
+    const svgMain = d3.select('.cfg .main')
+    const svgMinimap = d3.select('.cfg .minimap')
+    const output = svgMain.select('.output')
+    if(!svgMain.node()) return
+    const graphBBox = svgMain.node().getBoundingClientRect()
+    cfgStore.vWidth = graphBBox.width
+    cfgStore.vHeight = graphBBox.height
+    const outputBBox = output.node() ? output.node().getBBox() : {width: 1, height: 1}
+    if(!resize){
+      cfgStore.vX = (outputBBox.width - graphBBox.width) / 2
+      cfgStore.vY = -30
+    }
+    const minimapBBox = svgMinimap.node().getBoundingClientRect()
+    const scale = Math.max(outputBBox.width / minimapBBox.width, outputBBox.height / minimapBBox.height) * 1.1
+    cfgStore.mX = -(scale * minimapBBox.width - outputBBox.width) / 2
+    cfgStore.mY = -(scale * minimapBBox.height - outputBBox.height) / 2
+    cfgStore.mWidth = scale * minimapBBox.width
+    cfgStore.mHeight = scale * minimapBBox.height
   }
 
   renderGraph(){
     const {store} = this.props
     const funcAddr = store.selectedFunc
-    const svg = d3.select('.cfg .graph')
+    const svg = d3.select('.cfg .main')
 
     // empty graph
     if(funcAddr == null){
@@ -77,70 +106,39 @@ export class CFG extends React.Component {
       })
       d3.event.stopPropagation()
     })
-
-    // set up panning
-    const zoom = d3.zoom().on('zoom', () => svg.select('.output').attr('transform', d3.event.transform))
-    svg.call(zoom).on('wheel.zoom', null).on('dblclick.zoom', null)
     svg.selectAll('.node').on('mousedown', function(){
       svg.selectAll('rect.active').remove()
       d3.event.stopPropagation()
     })
-
-    // horizontally center the graph and apply vertical margin
-    const contBBox = svg.node().getBoundingClientRect()
-    svg.call(zoom.transform, d3.zoomIdentity.translate((contBBox.width - g.graph().width) / 2, 30))
   }
 
   renderMinimap(){
     const svg = d3.select('.cfg .minimap')
-
-    // clear existing output
     svg.select('.output').remove()
-
-    // center finder's coordinates
-    const finder = svg.select('.view-finder')
-    if(!finder.node()) return
-    const finderBBox = finder.node().getBBox()
-    finder.attr('transform', `translate(${-finderBBox.width / 2}, ${-finderBBox.height / 2})`)
-
-    // draw mini-cfg
-    const graph = d3.select('.cfg .graph .output')
-    if(!graph.node()) return
-    const cloned = d3.select(graph.node().cloneNode(true))
+    const output = d3.select('.cfg .main .output')
+    if(!output.node()) return
+    const cloned = d3.select(output.node().cloneNode(true))
     cloned.selectAll('text').remove()
     cloned.selectAll('.path').each(function(){this.removeAttribute('marker-end')})
     cloned.selectAll('rect, .path').each(function(){this.setAttribute('vector-effect', 'non-scaling-stroke')})
-    svg.insert(() => cloned.node(), '.view-loc')
-
-    // update coordinate system so mini-cfg's matches cfg's
-    const graphBBox = cloned.node().getBBox()
-    const contBBox = svg.node().getBoundingClientRect()
-    const scale = Math.max(graphBBox.width / contBBox.width, graphBBox.height / contBBox.height) * 1.1
-    let [x, y] = /translate\(([^,]+),([^,]+)\)/.exec(cloned.attr('transform')).slice(1).map(parseFloat)
-    x -= (scale * contBBox.width - graphBBox.width) / 2
-    y -= (scale * contBBox.height - graphBBox.height) / 2
-    const width = scale * contBBox.width
-    const height = scale * contBBox.height
-    svg.attr('viewBox', `${x} ${y} ${width} ${height}`)
-
-    // update background so it fills up the svg
-    d3.select('.background').attr('x', x).attr('y', y)
+    svg.select('.graph').append(() => cloned.node())
   }
 
   componentDidMount(){
     this.renderGraph()
     this.renderMinimap()
+    this.onResize(false)
   }
 
   render(){
-    const {cfgStore} = this.props.store
+    const cs = this.props.store.cfgStore
     return pug`
       .cfg(ref='container')
-        svg.graph(shapeRendering='crispEdges')
-        svg.minimap(shapeRendering='crispEdges')
-          rect.background(width='100%', height='100%')
-          g.view-loc(transform=${`translate(${cfgStore.viewX}, ${cfgStore.viewY})`})
-            rect.view-finder(width='40%' height='40%' vectorEffect='non-scaling-stroke')
+        svg.main.graph(shapeRendering='crispEdges' viewBox=${`${cs.vX} ${cs.vY} ${cs.vWidth} ${cs.vHeight}`})
+        svg.minimap(shapeRendering='crispEdges' viewBox=${`${cs.mX} ${cs.mY} ${cs.mWidth} ${cs.mHeight}`})
+          rect.background(x=${cs.mX} y=${cs.mY} width='100%' height='100%')
+          g.graph
+          rect.view(x=${cs.vX} y=${cs.vY} width=${cs.vWidth} height=${cs.vHeight} vectorEffect='non-scaling-stroke')
     `
   }
 }

@@ -86,7 +86,7 @@ body
   border: 1px solid #999
   background: linear-gradient(0deg, #dff, #fff)
   overflow: hidden
-  svg
+  .graph
     .node
       > rect
         stroke: #000
@@ -116,7 +116,7 @@ body
           stroke, fill: #0d0
         .right
           stroke, fill: #d00
-  .graph
+  .main
     width, height: 100%
   .minimap
     position: absolute
@@ -129,7 +129,7 @@ body
     .background
       fill: #ddd
       fill-opacity: 0.5
-    .view-finder
+    .view
       fill: none
       stroke: #000
       stroke-dasharray: 2px
