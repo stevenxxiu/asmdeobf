@@ -6,6 +6,8 @@ import dagreD3 from 'dagre-d3'
 import {highlightDeob} from '../highlight'
 
 export class CFGStore {
+  dragPt = null;
+  dragCTM = null;
   // graph's top left is at (0, 0), everything else is a viewbox
   @observable vX = 0;
   @observable vY = 0;
@@ -130,12 +132,53 @@ export class CFG extends React.Component {
     this.onResize(false)
   }
 
+  @action onDragStart(e, view=false){
+    const {cfgStore} = this.props.store
+    let svg = e.target
+    while(svg.nodeName != 'svg') svg = svg.parentNode
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    cfgStore.dragCTM = svg.getScreenCTM().inverse()
+    cfgStore.dragPt = pt.matrixTransform(cfgStore.dragCTM)
+    if(view){
+      cfgStore.vX = cfgStore.dragPt.x - cfgStore.vWidth / 2
+      cfgStore.vY = cfgStore.dragPt.y - cfgStore.vHeight / 2
+    }
+    e.preventDefault()
+  }
+
+  @action onDrag(e, view=false){
+    const {cfgStore} = this.props.store
+    if(cfgStore.dragPt){
+      const {x, y} = cfgStore.dragPt
+      cfgStore.dragPt.x = e.clientX
+      cfgStore.dragPt.y = e.clientY
+      cfgStore.dragPt = cfgStore.dragPt.matrixTransform(cfgStore.dragCTM)
+      cfgStore.vX += (view ? 1 : -1) * (cfgStore.dragPt.x - x)
+      cfgStore.vY += (view ? 1 : -1) * (cfgStore.dragPt.y - y)
+    }
+  }
+
+  @action onDragEnd(){
+    const {cfgStore} = this.props.store
+    cfgStore.dragPt = null
+  }
+
   render(){
     const cs = this.props.store.cfgStore
     return pug`
       .cfg(ref='container')
-        svg.main.graph(shapeRendering='crispEdges' viewBox=${`${cs.vX} ${cs.vY} ${cs.vWidth} ${cs.vHeight}`})
-        svg.minimap(shapeRendering='crispEdges' viewBox=${`${cs.mX} ${cs.mY} ${cs.mWidth} ${cs.mHeight}`})
+        svg.main.graph(
+          shapeRendering='crispEdges' viewBox=${`${cs.vX} ${cs.vY} ${cs.vWidth} ${cs.vHeight}`}
+          onMouseDown=${this.onDragStart.bind(this)} onMouseMove=${this.onDrag.bind(this)}
+          onMouseUp=${this.onDragEnd.bind(this)} onMouseOut=${this.onDragEnd.bind(this)}
+        )
+        svg.minimap(
+          shapeRendering='crispEdges' viewBox=${`${cs.mX} ${cs.mY} ${cs.mWidth} ${cs.mHeight}`} pointerEvents='all'
+          onMouseDown=${(e) => this.onDragStart(e, true)} onMouseMove=${(e) => this.onDrag(e, true)}
+          onMouseUp=${this.onDragEnd.bind(this)} onMouseOut=${this.onDragEnd.bind(this)}
+        )
           rect.background(x=${cs.mX} y=${cs.mY} width='100%' height='100%')
           g.graph
           rect.view(x=${cs.vX} y=${cs.vY} width=${cs.vWidth} height=${cs.vHeight} vectorEffect='non-scaling-stroke')

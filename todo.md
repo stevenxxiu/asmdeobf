@@ -8,4 +8,3 @@
 
 - cfg display
     - double click edges can jmp
-    - minimap
