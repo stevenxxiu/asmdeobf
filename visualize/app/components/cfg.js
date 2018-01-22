@@ -53,12 +53,8 @@ export class CFG extends React.Component {
     const {store} = this.props
     const funcAddr = store.selectedFunc
     const svg = d3.select('.cfg .main')
-
-    // empty graph
-    if(funcAddr == null){
-      svg.select('*').remove()
-      return
-    }
+    svg.select('*').remove()
+    if(funcAddr == null) return
 
     // setup graph data
     const g = new dagreD3.graphlib.Graph().setGraph({}).setDefaultEdgeLabel(() => ({}))
