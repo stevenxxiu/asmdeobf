@@ -77,11 +77,11 @@ with description('FuncExtract'):
                     lower_half = self.e.addr_to_block[101][0]
                     expect(upper_half.instrs).to(equal([('eip', '=', 101), ('eax', '=', 0)]))
                     expect(lower_half.instrs).to(equal([('eip', '=', 102), ('eax', '=', 1)]))
-                    expect(upper_half.children).to(equal((lower_half,)))
                     expect(block.children).to(equal((lower_half,)))
+                    expect(upper_half.children).to(equal((lower_half,)))
                     expect(self.e.visited).to(equal({lower_half}))
 
-                with it('ends and splits up block if block is same as go to block'):
+                with it('ends and splits up block if block is same as goto_block'):
                     self.e.r = MockRadare(['101,eip,='], 102)
                     self.e.block_to_constraint[self.goto_block] = DCon([CCon({'eip': 102})])
                     self.e._explore_block(self.goto_block, [])
@@ -132,6 +132,24 @@ with description('FuncExtract'):
                     self.e.block_to_constraint[block] = DCon([CCon({'eip': 100})])
                     self.e._explore_block(block, propagate_blocks)
                     expect(propagate_blocks).to(equal([(self.goto_block, 0, DCon([CCon({'eip': 100})]))]))
+
+        with it('detects as function if stack has next address and current address visited before'):
+            goto_block = Block([
+                ('eip', '=', 101), ('eax', '=', 0),
+                ('eip', '=', 102), ('eax', '=', 1),
+                ('eip', '=', 103), ('eip', '=[4]', 'esp'),
+                ('eip', '=', 104), ('eax', '=', 2),
+            ])
+            block = Block()
+            e = FuncExtract(MockRadare([], 100), None, {}, None, ())
+            e.addr_to_block[101] = (goto_block, 1)
+            e.block_to_constraint[block] = DCon([CCon({'eip': 101})])
+            e._explore_block(block, [])
+
+            # expect(block).to(eq_block(Block(set(), [
+            #     ('eip', '=', 101), ('eax', '=', 0),
+            # ])))
+            # expect(propagate_blocks).to(equal([(block, 2, DCon([CCon({'eip': 101, 'eax': 0})]))]))
 
     with description('_propagate_constraints'):
         with before.each:
