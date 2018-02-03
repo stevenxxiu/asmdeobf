@@ -7,6 +7,7 @@ from ordered_set import OrderedSet
 from analysis.block import Block
 from analysis.constraint import DisjunctConstConstraint
 from analysis.func import ESILToFunc, Function
+from analysis.winapi import win_api
 
 
 class FuncExtract:
@@ -114,8 +115,7 @@ class FuncExtract:
             for i, child in enumerate(block.children):
                 cur_con = deepcopy(con)
                 if block.call:
-                    # XXX implement api jmp, call, seh here instead of in constraints
-                    cur_con.step_api_jmp(*block.call)
+                    cur_con.step_ret(win_api.get_stack_change(*block.call) + 4)
                 if block.condition:
                     # explore remaining code first before exploring jmp
                     cur_con.solve(block.condition, [True, False][i])

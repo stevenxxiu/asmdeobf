@@ -3,7 +3,6 @@ from copy import deepcopy
 
 from analysis.block import Block, block_simplify
 from analysis.utils import MemValues, is_var
-from analysis.winapi import win_api
 
 __all__ = ['ConstConstraint', 'DisjunctConstConstraint']
 
@@ -202,13 +201,12 @@ class ConstConstraint:
         else:
             raise ValueError('instr', instr)
 
-    def step_api_jmp(self, lib_name, api_name):
+    def step_ret(self, stack_change):
         # vars at the end of api call don't have underscore
         for var in list(self.vars):
             if var != 'esp':
                 self.vars.pop(var)
         self.mem.invalidate()
-        stack_change = win_api.get_stack_change(lib_name, api_name) + 4
         val = self.vars.get('esp', None)
         if isinstance(val, tuple) and val[0] == 'esp_0':
             if (-stack_change, 4) in self.stack.values:
@@ -287,9 +285,9 @@ class DisjunctConstConstraint:
         for con in self.const_cons:
             con.step(instr)
 
-    def step_api_jmp(self, lib_name, api_name):
+    def step_ret(self, stack_change):
         for con in self.const_cons:
-            con.step_api_jmp(lib_name, api_name)
+            con.step_ret(stack_change)
 
     def solve(self, var, value):
         '''

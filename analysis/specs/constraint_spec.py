@@ -4,7 +4,6 @@ from expects import *
 
 from analysis.constraint import ConstConstraint, DisjunctConstConstraint
 from analysis.specs._stub import *
-from analysis.winapi import win_api
 
 with description('ConstConstraint'):
     with description('from_func_init'):
@@ -284,44 +283,38 @@ with description('ConstConstraint'):
         with it('raises ValueError on unknown assign'):
             expect(lambda: self.c.step((1, '??=', 1))).to(raise_error(ValueError))
 
-    with description('step_api_jmp'):
-        with before.each:
-            self.patcher = patch.object(win_api, 'get_stack_change', return_value=0)
-            self.patcher.__enter__()
-        with after.all:
-            self.patcher.__exit__()
-
+    with description('step_ret'):
         with it('invalidates registers'):
-            self.c.step_api_jmp('somelib', 'somemethod')
+            self.c.step_ret(4)
             expect(self.c.vars).to_not(have_key('eax'))
 
         with it('updates eip'):
             self.c.stack.values[(-4, 4)] = 1
             self.c.vars['esp'] = ('esp_0', 0)
-            self.c.step_api_jmp('somelib', 'somemethod')
+            self.c.step_ret(4)
             expect(self.c.vars).to(have_key('eip', 1))
 
         with it('updates esp'):
             self.c.vars['esp'] = ('esp_0', 0)
-            self.c.step_api_jmp('somelib', 'somemethod')
+            self.c.step_ret(4)
             expect(self.c.vars).to(have_key('esp', ('esp_0', 4)))
 
         with it('invalidates overlapping stack values since can be changed by call'):
             self.c.stack.values[(-5, 4)] = 1
             self.c.stack.values[(-4, 4)] = 2
             self.c.vars['esp'] = ('esp_0', -8)
-            self.c.step_api_jmp('somelib', 'somemethod')
+            self.c.step_ret(4)
             expect(self.c.stack.values).to(equal({(-4, 4): 2}))
 
         with it('invalidates all stack values if esp is unknown'):
             self.c.stack.values[(0, 4)] = 1
             self.c.vars['esp'] = ('eax_0', 0)
-            self.c.step_api_jmp('somelib', 'somemethod')
+            self.c.step_ret(4)
             expect(self.c.stack.values).to(equal({}))
 
         with it('invalidates memory'):
             self.c.mem.values[(0, 4)] = 1
-            self.c.step_api_jmp('somelib', 'somemethod')
+            self.c.step_ret(4)
             expect(self.c.mem.values).to(equal({}))
 
 with description('DisjunctConstConstraint'):
@@ -381,12 +374,12 @@ with description('DisjunctConstConstraint'):
                 ConstConstraint({'eax': 1, 'tmp': 2}), ConstConstraint({'eax': 1, 'tmp': 2})
             ])))
 
-    with description('step_api_jmp'):
-        with it('calls step_api_jmp for each const constraint'):
-            with patch('analysis.constraint.ConstConstraint.step_api_jmp') as step_api_jmp:
+    with description('step_ret'):
+        with it('calls step_ret for each const constraint'):
+            with patch('analysis.constraint.ConstConstraint.step_ret') as step_ret:
                 c = DisjunctConstConstraint([ConstConstraint({'eax': 1}), ConstConstraint({'eax': 2})])
-                c.step_api_jmp('somelib', 'somemethod')
-                expect(step_api_jmp.call_count).to(equal(2))
+                c.step_ret(4)
+                expect(step_ret.call_count).to(equal(2))
 
     with description('finalize'):
         with it('works with empty constraints'):
